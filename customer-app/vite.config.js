@@ -29,6 +29,25 @@ function buildCustomerCode(customers) {
   return `KHT-${String(maxId + 1).padStart(2, '0')}`
 }
 
+function toRawBase64(value) {
+  if (!value) {
+    return ''
+  }
+
+  const raw = String(value).trim()
+  const matched = /^data:.*;base64,(.+)$/i.exec(raw)
+  return (matched?.[1] || raw).replace(/\s+/g, '')
+}
+
+function isValidBase64(value) {
+  if (!value) {
+    return false
+  }
+
+  // Accept canonical base64 payload (no data URL header).
+  return /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)
+}
+
 function dataJsonApiPlugin() {
   let saveQueue = Promise.resolve()
 
@@ -51,6 +70,8 @@ function dataJsonApiPlugin() {
       const dataFilePath = path.resolve(rootDir, 'public', 'data.json')
       const currentCustomers = await readCustomers(dataFilePath)
       const incoming = JSON.parse(body || '{}')
+      const rawBase64 = toRawBase64(incoming.anh_thuc_te)
+      const validBase64 = isValidBase64(rawBase64)
 
       const customer = {
         ma: buildCustomerCode(currentCustomers),
@@ -64,7 +85,7 @@ function dataJsonApiPlugin() {
           vi_do: incoming?.toa_do?.vi_do,
           kinh_do: incoming?.toa_do?.kinh_do,
         },
-        anh_thuc_te: incoming.anh_thuc_te || '',
+        anh_thuc_te: validBase64 ? rawBase64 : '',
         ngay_tao: incoming.ngay_tao || new Date().toISOString(),
       }
 

@@ -99,6 +99,16 @@ function resizeImageFile(file, maxDimension = 960, quality = 0.72) {
   })
 }
 
+function toRawBase64(value) {
+  if (!value) {
+    return ''
+  }
+
+  const stringValue = String(value).trim()
+  const matched = /^data:.*;base64,(.+)$/i.exec(stringValue)
+  return (matched?.[1] || stringValue).replace(/\s+/g, '')
+}
+
 function App() {
   const [form, setForm] = useState(() => {
     const initial = createInitialForm()
@@ -322,7 +332,7 @@ function App() {
           vi_do: locationData.lat,
           kinh_do: locationData.lng,
         },
-        anh_thuc_te: photoDataUrl,
+        anh_thuc_te: toRawBase64(photoDataUrl),
         ngay_tao: new Date().toISOString(),
       }
 
@@ -476,7 +486,7 @@ function App() {
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*"
+              accept="image/*;capture=camera,image/*"
               capture="environment"
               className="hidden"
               onChange={handlePhotoFileChange}
