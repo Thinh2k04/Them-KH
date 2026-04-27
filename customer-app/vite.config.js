@@ -59,10 +59,12 @@ function dataJsonApiPlugin() {
         loai: incoming.loai || '',
         kv: incoming.kv || '',
         npp: incoming.npp || '',
+        nganh_hang: Array.isArray(incoming.nganh_hang) ? incoming.nganh_hang : [],
         toa_do: {
           vi_do: incoming?.toa_do?.vi_do,
           kinh_do: incoming?.toa_do?.kinh_do,
         },
+        anh_thuc_te: incoming.anh_thuc_te || '',
         ngay_tao: incoming.ngay_tao || new Date().toISOString(),
       }
 

@@ -3,13 +3,12 @@ import {
   CHANNEL_OPTIONS,
   CHECK_LABELS,
   KV_OPTIONS,
-  STORAGE_KEY,
   channelTypeMap,
   nppByKV,
   nganh_hang_options,
 } from './constants/customerConfig'
 import { collectVerifiedLocation } from './services/locationService'
-import { buildCustomerCode, createInitialForm, formatDate } from './utils/customerHelpers'
+import { createInitialForm, formatDate } from './utils/customerHelpers'
 import './App.css'
 
 function normalizeNganhHang(value) {
@@ -47,97 +46,21 @@ function normalizeCustomers(rawValue) {
   return []
 }
 
-function getCustomersFromStorage() {
-  try {
-    const storedRaw = localStorage.getItem(STORAGE_KEY)
-    if (!storedRaw) {
-      return null
-    }
+async function saveCustomerToDataFile(customerPayload) {
+  const response = await fetch('/api/customers', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(customerPayload),
+  })
 
-    const parsed = JSON.parse(storedRaw)
-    const parsedCustomers = normalizeCustomers(parsed)
-    return parsedCustomers.length ? parsedCustomers : []
-  } catch {
-    return null
-  }
-}
-
-function saveCustomersToStorage(customerList) {
-  const payload = {
-    khach_hang: customerList,
+  if (!response.ok) {
+    throw new Error('Không thể lưu dữ liệu vào data.json.')
   }
 
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
-}
-
-function isQuotaExceededError(error) {
-  const message = String(error?.message || '').toLowerCase()
-
-  return (
-    error?.name === 'QuotaExceededError' ||
-    error?.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
-    error?.code === 22 ||
-    error?.code === 1014 ||
-    message.includes('quota') ||
-    message.includes('exceeded')
-  )
-}
-
-function saveCustomersWithQuotaGuard(customerList) {
-  const trySave = (listToSave) => {
-    saveCustomersToStorage(listToSave)
-    return listToSave
-  }
-
-  try {
-    return trySave(customerList)
-  } catch (error) {
-    if (!isQuotaExceededError(error)) {
-      throw error
-    }
-
-    const removePhotosFromOldest = customerList.map((customer) => ({ ...customer }))
-
-    // Stage 1: keep all records, progressively drop photos from old to new.
-    for (let index = removePhotosFromOldest.length - 1; index >= 0; index -= 1) {
-      if (removePhotosFromOldest[index].anh_thuc_te) {
-        removePhotosFromOldest[index].anh_thuc_te = ''
-      }
-
-      try {
-        return trySave(removePhotosFromOldest)
-      } catch (retryError) {
-        if (!isQuotaExceededError(retryError)) {
-          throw retryError
-        }
-      }
-    }
-
-    const keepLatestOnly = customerList.length
-      ? [
-          {
-            ...customerList[0],
-            anh_thuc_te: '',
-          },
-        ]
-      : []
-
-    // Stage 2: keep only newest customer metadata (no photo).
-    try {
-      return trySave(keepLatestOnly)
-    } catch (retryError) {
-      if (!isQuotaExceededError(retryError)) {
-        throw retryError
-      }
-
-      throw new Error(
-        'Dữ liệu lưu tạm đã đầy trên thiết bị. Đã tự giảm dung lượng nhưng vẫn không đủ. Vui lòng xóa dữ liệu trình duyệt rồi thử lại.',
-        {
-          cause: retryError,
-        }
-      )
-    }
-  }
+  const parsed = await response.json()
+  return normalizeCustomers(parsed)
 }
 
 function resizeImageFile(file, maxDimension = 960, quality = 0.72) {
@@ -211,12 +134,6 @@ function App() {
     let cancelled = false
 
     async function loadInitialData() {
-      const fromStorage = getCustomersFromStorage()
-      if (!cancelled && fromStorage) {
-        setCustomers(fromStorage)
-        return
-      }
-
       try {
         const response = await fetch('/data.json', { cache: 'no-store' })
         if (!response.ok) {
@@ -228,7 +145,6 @@ function App() {
 
         if (!cancelled) {
           setCustomers(parsedCustomers)
-          saveCustomersToStorage(parsedCustomers)
         }
       } catch {
         // Ignore load failures and allow user to create new data.
@@ -396,7 +312,6 @@ function App() {
       }
 
       const payload = {
-        ma: buildCustomerCode(customers),
         ten: form.ten.trim(),
         kenh: form.kenh,
         loai: form.loai,
@@ -411,8 +326,7 @@ function App() {
         ngay_tao: new Date().toISOString(),
       }
 
-      const nextCustomers = [payload, ...customers]
-      const savedCustomers = saveCustomersWithQuotaGuard(nextCustomers)
+      const savedCustomers = await saveCustomerToDataFile(payload)
       setCustomers(savedCustomers)
       resetForm()
     } catch (err) {
