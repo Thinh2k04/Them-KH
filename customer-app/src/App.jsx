@@ -357,14 +357,22 @@ function App() {
       const selectedLoai = form.loai || ''
       const selectedKv = form.kv || ''
       const selectedNpp = form.npp || ''
+      const selectedNganhHang = normalizeNganhHang(form.nganh_hang)
 
       const validKenh = CHANNEL_OPTIONS.includes(selectedKenh)
       const validLoai = (channelTypeMap[selectedKenh] || []).includes(selectedLoai)
       const validKv = KV_OPTIONS.includes(selectedKv)
       const validNpp = (nppByKV[selectedKv] || []).includes(selectedNpp)
+      const validNganhHang =
+        selectedNganhHang.length > 0 &&
+        selectedNganhHang.every((item) => nganh_hang_options.includes(item))
 
       if (!validKenh || !validLoai || !validKv || !validNpp) {
         throw new Error('Vui lòng chọn đầy đủ Kênh, Loại, Khu vực và NPP trước khi lưu.')
+      }
+
+      if (!validNganhHang) {
+        throw new Error('Vui lòng chọn ít nhất 1 ngành hàng kinh doanh hợp lệ trước khi lưu.')
       }
 
       if (!form.ten.trim() || !form.npp.trim()) {
@@ -385,7 +393,7 @@ function App() {
         loai: form.loai,
         kv: form.kv,
         npp: form.npp.trim(),
-        nganh_hang: form.nganh_hang,
+        nganh_hang: selectedNganhHang,
         toa_do: {
           vi_do: locationData.lat,
           kinh_do: locationData.lng,
