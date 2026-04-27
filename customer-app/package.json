@@ -10,6 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@turf/boolean-point-in-polygon": "^7.3.5",
+    "@turf/helpers": "^7.3.5",
+    "leaflet": "^1.9.4",
     "react": "^19.2.5",
     "react-dom": "^19.2.5"
   },

@@ -387,6 +387,33 @@ button:disabled {
   border-radius: 12px;
 }
 
+.location-map-card {
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  background: #fff;
+}
+
+.mini-map-frame {
+  width: 100%;
+  min-height: 210px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.npp-map-label {
+  border: 1px solid #1d4ed8;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #1e3a8a;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 3px 6px;
+  box-shadow: none;
+}
+
 .empty {
   margin-top: 14px;
   color: var(--muted);

@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import L from 'leaflet'
+import booleanPointInPolygon from '@turf/boolean-point-in-polygon'
+import { point as turfPoint } from '@turf/helpers'
 import {
   ADMIN_CODE_MAP,
   CHANNEL_OPTIONS,
@@ -10,6 +13,7 @@ import {
 } from './constants/customerConfig'
 import { collectVerifiedLocation } from './services/locationService'
 import { createInitialForm, formatDate } from './utils/customerHelpers'
+import 'leaflet/dist/leaflet.css'
 import './App.css'
 
 function normalizeNganhHang(value) {
@@ -127,6 +131,90 @@ function toImageDataUrl(rawBase64) {
   return `data:image/jpeg;base64,${trimmed}`
 }
 
+function updateBounds(lng, lat, bounds) {
+  if (lng < bounds.minLng) bounds.minLng = lng
+  if (lng > bounds.maxLng) bounds.maxLng = lng
+  if (lat < bounds.minLat) bounds.minLat = lat
+  if (lat > bounds.maxLat) bounds.maxLat = lat
+}
+
+function buildFeatureBounds(geometry) {
+  const bounds = {
+    minLng: Number.POSITIVE_INFINITY,
+    minLat: Number.POSITIVE_INFINITY,
+    maxLng: Number.NEGATIVE_INFINITY,
+    maxLat: Number.NEGATIVE_INFINITY,
+  }
+
+  if (!geometry) {
+    return null
+  }
+
+  if (geometry.type === 'Polygon') {
+    for (const ring of geometry.coordinates || []) {
+      for (const [lng, lat] of ring || []) {
+        updateBounds(lng, lat, bounds)
+      }
+    }
+  } else if (geometry.type === 'MultiPolygon') {
+    for (const polygon of geometry.coordinates || []) {
+      for (const ring of polygon || []) {
+        for (const [lng, lat] of ring || []) {
+          updateBounds(lng, lat, bounds)
+        }
+      }
+    }
+  } else {
+    return null
+  }
+
+  if (!Number.isFinite(bounds.minLng) || !Number.isFinite(bounds.minLat)) {
+    return null
+  }
+
+  return bounds
+}
+
+function prepareNppAreas(featureCollection) {
+  const features = Array.isArray(featureCollection?.features) ? featureCollection.features : []
+
+  return features
+    .map((feature) => {
+      const geometry = feature?.geometry
+      const npp = feature?.properties?.npp
+      if (!geometry || !npp) {
+        return null
+      }
+
+      const bbox = buildFeatureBounds(geometry)
+      if (!bbox) {
+        return null
+      }
+
+      return { feature, bbox }
+    })
+    .filter(Boolean)
+}
+
+function findNppFeatureByPoint(point, areasPrepared) {
+  const [lng, lat] = point
+  const targetPoint = turfPoint(point)
+
+  for (const item of areasPrepared || []) {
+    const { feature, bbox } = item
+
+    if (lng < bbox.minLng || lng > bbox.maxLng || lat < bbox.minLat || lat > bbox.maxLat) {
+      continue
+    }
+
+    if (booleanPointInPolygon(targetPoint, feature)) {
+      return feature
+    }
+  }
+
+  return null
+}
+
 function App() {
   const [form, setForm] = useState(() => {
     const initial = createInitialForm()
@@ -143,6 +231,8 @@ function App() {
   const [selectedCustomer, setSelectedCustomer] = useState(null)
   const [loginCode, setLoginCode] = useState('')
   const [currentUser, setCurrentUser] = useState('')
+  const [nppAreasPrepared, setNppAreasPrepared] = useState([])
+  const [detectedNpp, setDetectedNpp] = useState('')
   const [locationData, setLocationData] = useState(null)
   const [photoDataUrl, setPhotoDataUrl] = useState('')
   const [loadingLocation, setLoadingLocation] = useState(false)
@@ -151,6 +241,9 @@ function App() {
   const [loginError, setLoginError] = useState('')
 
   const fileInputRef = useRef(null)
+  const miniMapRef = useRef(null)
+  const miniMapInstanceRef = useRef(null)
+  const miniMapLayersRef = useRef([])
 
   const locationBadge = useMemo(() => {
     if (!locationData) {
@@ -203,6 +296,114 @@ function App() {
     window.addEventListener('keydown', handleEsc)
     return () => window.removeEventListener('keydown', handleEsc)
   }, [selectedCustomer])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadAreas() {
+      try {
+        const response = await fetch('/areas.geojson', { cache: 'no-store' })
+        if (!response.ok) {
+          return
+        }
+
+        const parsed = await response.json()
+        if (!cancelled) {
+          setNppAreasPrepared(prepareNppAreas(parsed))
+        }
+      } catch {
+        // Ignore area data load failures.
+      }
+    }
+
+    loadAreas()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!locationData || !miniMapRef.current) {
+      return
+    }
+
+    if (!miniMapInstanceRef.current) {
+      const map = L.map(miniMapRef.current, {
+        zoomControl: true,
+        attributionControl: false,
+      }).setView([locationData.lat, locationData.lng], 16)
+
+      L.tileLayer('http://www.google.cn/maps/vt?lyrs=s@189&gl=cn&x={x}&y={y}&z={z}', {
+        attribution: '',
+        maxZoom: 22,
+        minZoom: 5,
+      }).addTo(map)
+
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png', {
+        attribution: '',
+        maxZoom: 22,
+        minZoom: 5,
+        opacity: 0.9,
+        subdomains: 'abcd',
+      }).addTo(map)
+
+      miniMapInstanceRef.current = map
+    }
+
+    const map = miniMapInstanceRef.current
+    miniMapLayersRef.current.forEach((layer) => map.removeLayer(layer))
+    miniMapLayersRef.current = []
+
+    const currentPoint = [locationData.lng, locationData.lat]
+    const currentLatLng = [locationData.lat, locationData.lng]
+    const matchedFeature = findNppFeatureByPoint(currentPoint, nppAreasPrepared)
+    const matchedNpp = matchedFeature?.properties?.npp || ''
+    setDetectedNpp(matchedNpp)
+
+    const markerLayer = L.circleMarker(currentLatLng, {
+      radius: 6,
+      color: '#dc2626',
+      fillColor: '#ef4444',
+      fillOpacity: 1,
+      weight: 2,
+    }).addTo(map)
+    miniMapLayersRef.current.push(markerLayer)
+
+    if (matchedFeature) {
+      const featureLayer = L.geoJSON(matchedFeature, {
+        style: {
+          color: '#2563eb',
+          weight: 2,
+          fillColor: '#60a5fa',
+          fillOpacity: 0.22,
+        },
+      }).addTo(map)
+      miniMapLayersRef.current.push(featureLayer)
+
+      const tooltipLayer = L.tooltip({
+        permanent: true,
+        direction: 'top',
+        className: 'npp-map-label',
+      })
+        .setLatLng(currentLatLng)
+        .setContent(`NPP: ${matchedNpp}`)
+        .addTo(map)
+      miniMapLayersRef.current.push(tooltipLayer)
+
+      map.fitBounds(featureLayer.getBounds(), { padding: [20, 20], maxZoom: 17 })
+    } else {
+      map.setView(currentLatLng, 16)
+    }
+  }, [locationData, nppAreasPrepared])
+
+  useEffect(() => {
+    return () => {
+      if (miniMapInstanceRef.current) {
+        miniMapInstanceRef.current.remove()
+        miniMapInstanceRef.current = null
+      }
+    }
+  }, [])
 
   function handleLoginSubmit(event) {
     event.preventDefault()
@@ -343,6 +544,7 @@ function App() {
       nganh_hang: [],
     })
     setLocationData(null)
+    setDetectedNpp('')
     setPhotoDataUrl('')
     setError('')
   }
@@ -566,6 +768,15 @@ function App() {
                 <li>Điểm tin cậy: {locationData.trustScore}/100</li> */}
               </ul>
             )}
+            {locationData ? (
+              <div className="location-map-card">
+                <p className="hint">
+                  Khu vực NPP theo GPS:{' '}
+                  <strong>{detectedNpp || 'Chưa tìm thấy trong vùng NPP đã khai báo'}</strong>
+                </p>
+                <div ref={miniMapRef} className="mini-map-frame" />
+              </div>
+            ) : null}
           </div>
 
           <div className="card-block">
