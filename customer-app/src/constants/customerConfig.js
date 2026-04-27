@@ -91,10 +91,14 @@ export const channelTypeMap = {
   'Kênh horeca': ['kênh horeca'],
   'Kênh công nghiệp': ['Kênh công nghiệp'],
 }
+export const nganh_hang_options = [
+  'bim quẩy','chân gà',
+  'Hàng ướt', 'Sốt ', 'Thạnh', 'Sữa chua',
+]
 
 export const KV_OPTIONS = Object.keys(nppByKV)
 export const CHANNEL_OPTIONS = Object.keys(channelTypeMap)
-
+export const NPP_OPTIONS = Object.values(nppByKV).flat()
 export const CHECK_LABELS = {
   accuracyOk: 'Độ chính xác GPS sai (nghi ngờ fake)',
   spreadOk: 'Các mẫu GPS ổn định',

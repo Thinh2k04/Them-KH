@@ -6,25 +6,189 @@ import {
   STORAGE_KEY,
   channelTypeMap,
   nppByKV,
+  nganh_hang_options,
 } from './constants/customerConfig'
 import { collectVerifiedLocation } from './services/locationService'
 import { buildCustomerCode, createInitialForm, formatDate } from './utils/customerHelpers'
 import './App.css'
 
-function App() {
-  const [form, setForm] = useState(createInitialForm)
-  const [customers, setCustomers] = useState(() => {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) {
-      return []
+function normalizeNganhHang(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => String(item || '').trim())
+      .filter(Boolean)
+  }
+
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean)
+  }
+
+  return []
+}
+
+function normalizeCustomers(rawValue) {
+  const toNormalizedArray = (list) =>
+    list.map((customer) => ({
+      ...customer,
+      nganh_hang: normalizeNganhHang(customer?.nganh_hang),
+    }))
+
+  if (Array.isArray(rawValue)) {
+    return toNormalizedArray(rawValue)
+  }
+
+  if (rawValue && typeof rawValue === 'object' && Array.isArray(rawValue.khach_hang)) {
+    return toNormalizedArray(rawValue.khach_hang)
+  }
+
+  return []
+}
+
+function getCustomersFromStorage() {
+  try {
+    const storedRaw = localStorage.getItem(STORAGE_KEY)
+    if (!storedRaw) {
+      return null
     }
 
+    const parsed = JSON.parse(storedRaw)
+    const parsedCustomers = normalizeCustomers(parsed)
+    return parsedCustomers.length ? parsedCustomers : []
+  } catch {
+    return null
+  }
+}
+
+function saveCustomersToStorage(customerList) {
+  const payload = {
+    khach_hang: customerList,
+  }
+
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
+}
+
+function isQuotaExceededError(error) {
+  const message = String(error?.message || '').toLowerCase()
+
+  return (
+    error?.name === 'QuotaExceededError' ||
+    error?.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+    error?.code === 22 ||
+    error?.code === 1014 ||
+    message.includes('quota') ||
+    message.includes('exceeded')
+  )
+}
+
+function saveCustomersWithQuotaGuard(customerList) {
+  const trySave = (listToSave) => {
+    saveCustomersToStorage(listToSave)
+    return listToSave
+  }
+
+  try {
+    return trySave(customerList)
+  } catch (error) {
+    if (!isQuotaExceededError(error)) {
+      throw error
+    }
+
+    const removePhotosFromOldest = customerList.map((customer) => ({ ...customer }))
+
+    // Stage 1: keep all records, progressively drop photos from old to new.
+    for (let index = removePhotosFromOldest.length - 1; index >= 0; index -= 1) {
+      if (removePhotosFromOldest[index].anh_thuc_te) {
+        removePhotosFromOldest[index].anh_thuc_te = ''
+      }
+
+      try {
+        return trySave(removePhotosFromOldest)
+      } catch (retryError) {
+        if (!isQuotaExceededError(retryError)) {
+          throw retryError
+        }
+      }
+    }
+
+    const keepLatestOnly = customerList.length
+      ? [
+          {
+            ...customerList[0],
+            anh_thuc_te: '',
+          },
+        ]
+      : []
+
+    // Stage 2: keep only newest customer metadata (no photo).
     try {
-      return JSON.parse(raw)
-    } catch {
-      return []
+      return trySave(keepLatestOnly)
+    } catch (retryError) {
+      if (!isQuotaExceededError(retryError)) {
+        throw retryError
+      }
+
+      throw new Error(
+        'Dữ liệu lưu tạm đã đầy trên thiết bị. Đã tự giảm dung lượng nhưng vẫn không đủ. Vui lòng xóa dữ liệu trình duyệt rồi thử lại.',
+        {
+          cause: retryError,
+        }
+      )
+    }
+  }
+}
+
+function resizeImageFile(file, maxDimension = 960, quality = 0.72) {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file)
+    const image = new Image()
+
+    image.onload = () => {
+      const ratio = Math.min(1, maxDimension / Math.max(image.width, image.height))
+      const width = Math.max(1, Math.round(image.width * ratio))
+      const height = Math.max(1, Math.round(image.height * ratio))
+
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+
+      const context = canvas.getContext('2d')
+      if (!context) {
+        URL.revokeObjectURL(objectUrl)
+        reject(new Error('Không thể xử lý ảnh từ camera.'))
+        return
+      }
+
+      context.drawImage(image, 0, 0, width, height)
+      const compressedDataUrl = canvas.toDataURL('image/jpeg', quality)
+      URL.revokeObjectURL(objectUrl)
+      resolve(compressedDataUrl)
+    }
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl)
+      reject(new Error('Không thể đọc ảnh từ camera.'))
+    }
+
+    image.src = objectUrl
+  })
+}
+
+function App() {
+  const [form, setForm] = useState(() => {
+    const initial = createInitialForm()
+    return {
+      ...initial,
+      kenh: '',
+      loai: '',
+      kv: '',
+      npp: '',
+      nganh_hang: [],
     }
   })
+  const [customers, setCustomers] = useState([])
   const [locationData, setLocationData] = useState(null)
   const [photoDataUrl, setPhotoDataUrl] = useState('')
   const [loadingLocation, setLoadingLocation] = useState(false)
@@ -43,31 +207,75 @@ function App() {
       : { label: 'Vị trí chưa đạt chuẩn', tone: 'danger' }
   }, [locationData])
 
-  const nextCustomerCode = useMemo(() => buildCustomerCode(customers), [customers])
-
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(customers))
-  }, [customers])
+    let cancelled = false
+
+    async function loadInitialData() {
+      const fromStorage = getCustomersFromStorage()
+      if (!cancelled && fromStorage) {
+        setCustomers(fromStorage)
+        return
+      }
+
+      try {
+        const response = await fetch('/data.json', { cache: 'no-store' })
+        if (!response.ok) {
+          return
+        }
+
+        const parsed = await response.json()
+        const parsedCustomers = normalizeCustomers(parsed)
+
+        if (!cancelled) {
+          setCustomers(parsedCustomers)
+          saveCustomersToStorage(parsedCustomers)
+        }
+      } catch {
+        // Ignore load failures and allow user to create new data.
+      }
+    }
+
+    loadInitialData()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   function updateField(key, value) {
     setForm((prev) => {
       if (key === 'kenh') {
+        const nextKenh = value || ''
         return {
           ...prev,
-          kenh: value,
-          loai: channelTypeMap[value]?.[0] || '',
+          kenh: nextKenh,
+          loai: channelTypeMap[nextKenh]?.[0] || '',
         }
       }
 
       if (key === 'kv') {
+        const nextKv = value || ''
         return {
           ...prev,
-          kv: value,
-          npp: nppByKV[value]?.[0] || '',
+          kv: nextKv,
+          npp: nppByKV[nextKv]?.[0] || '',
         }
       }
 
       return { ...prev, [key]: value }
+    })
+  }
+
+  function handleNganhHangChange(option) {
+    setForm((prev) => {
+      const hasOption = prev.nganh_hang.includes(option)
+      const nextNganhHang = hasOption
+        ? prev.nganh_hang.filter((item) => item !== option)
+        : [...prev.nganh_hang, option]
+
+      return {
+        ...prev,
+        nganh_hang: nextNganhHang,
+      }
     })
   }
 
@@ -109,12 +317,15 @@ function App() {
     }
   }
 
-  function handleOpenPhotoInput() {
+  function handleOpenCamera() {
+    setError('')
+
     fileInputRef.current?.click()
   }
 
-  function handlePhotoFileChange(event) {
+  async function handlePhotoFileChange(event) {
     const file = event.target.files?.[0]
+
     if (!file) {
       return
     }
@@ -122,24 +333,31 @@ function App() {
     setError('')
 
     if (!file.type.startsWith('image/')) {
-      setError('Tệp đã chọn không phải hình ảnh. Vui lòng chọn lại.')
+      setError('Tệp đã chọn không phải ảnh hợp lệ. Vui lòng chụp lại.')
+      event.target.value = ''
       return
     }
 
-    const reader = new FileReader()
-    reader.onload = () => {
-      setPhotoDataUrl(String(reader.result || ''))
+    try {
+      const optimizedDataUrl = await resizeImageFile(file)
+      setPhotoDataUrl(optimizedDataUrl)
+    } catch {
+      setError('Không thể xử lý ảnh từ camera. Vui lòng thử lại.')
     }
-    reader.onerror = () => {
-      setError('Không thể đọc ảnh. Vui lòng thử lại.')
-    }
-    reader.readAsDataURL(file)
 
     event.target.value = ''
   }
 
   function resetForm() {
-    setForm(createInitialForm())
+    const initial = createInitialForm()
+    setForm({
+      ...initial,
+      kenh: '',
+      loai: '',
+      kv: '',
+      npp: '',
+      nganh_hang: [],
+    })
     setLocationData(null)
     setPhotoDataUrl('')
     setError('')
@@ -151,6 +369,20 @@ function App() {
     setSubmitting(true)
 
     try {
+      const selectedKenh = form.kenh || ''
+      const selectedLoai = form.loai || ''
+      const selectedKv = form.kv || ''
+      const selectedNpp = form.npp || ''
+
+      const validKenh = CHANNEL_OPTIONS.includes(selectedKenh)
+      const validLoai = (channelTypeMap[selectedKenh] || []).includes(selectedLoai)
+      const validKv = KV_OPTIONS.includes(selectedKv)
+      const validNpp = (nppByKV[selectedKv] || []).includes(selectedNpp)
+
+      if (!validKenh || !validLoai || !validKv || !validNpp) {
+        throw new Error('Vui lòng chọn đầy đủ Kênh, Loại, Khu vực và NPP trước khi lưu.')
+      }
+
       if (!form.ten.trim() || !form.npp.trim()) {
         throw new Error('Vui lòng nhập đầy đủ tên khách hàng và nhà phân phối.')
       }
@@ -164,51 +396,30 @@ function App() {
       }
 
       const payload = {
-        ma: nextCustomerCode,
+        ma: buildCustomerCode(customers),
         ten: form.ten.trim(),
         kenh: form.kenh,
         loai: form.loai,
         kv: form.kv,
         npp: form.npp.trim(),
+        nganh_hang: form.nganh_hang,
         toa_do: {
           vi_do: locationData.lat,
           kinh_do: locationData.lng,
-          do_chinh_xac_m: Number(locationData.accuracy.toFixed(2)),
-          do_chinh_xac_nho_nhat_m: Number(locationData.minAccuracy.toFixed(2)),
-          do_chinh_xac_lon_nhat_m: Number(locationData.maxAccuracy.toFixed(2)),
-          do_lech_m: Number(locationData.spread.toFixed(2)),
-          do_on_dinh_tin_hieu_m: Number(locationData.accuracySpread.toFixed(2)),
-          toc_do_bat_thuong_max_kmh: Number(locationData.maxSpeedKmH.toFixed(2)),
-          moc_thoi_gian: new Date(locationData.timestamp).toISOString(),
-          diem_tin_cay: locationData.trustScore,
-          ket_qua_kiem_tra: locationData.checks,
-          thong_tin_mang: locationData.networkInfo,
-          mui_gio_thiet_bi: locationData.timezone,
-          co_automation_flag: locationData.webdriverFlag,
         },
         anh_thuc_te: photoDataUrl,
         ngay_tao: new Date().toISOString(),
       }
 
-      setCustomers((prev) => [payload, ...prev])
+      const nextCustomers = [payload, ...customers]
+      const savedCustomers = saveCustomersWithQuotaGuard(nextCustomers)
+      setCustomers(savedCustomers)
       resetForm()
     } catch (err) {
       setError(err.message || 'Không thể lưu khách hàng.')
     } finally {
       setSubmitting(false)
     }
-  }
-
-  function exportJson() {
-    const blob = new Blob([JSON.stringify({ khach_hang: customers }, null, 2)], {
-      type: 'application/json',
-    })
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = `khach-hang-${Date.now()}.json`
-    anchor.click()
-    URL.revokeObjectURL(url)
   }
 
   return (
@@ -219,19 +430,11 @@ function App() {
           <h1>Thêm khách hàng mới</h1>
           <p className="subtitle">Lấy vị trí GPS chuẩn, chụp ảnh thực tế, và lưu theo mẫu dữ liệu của bạn.</p>
         </div>
-        <button type="button" className="ghost" onClick={exportJson} disabled={!customers.length}>
-          Xuất JSON
-        </button>
       </header>
 
       <section className="layout">
         <form className="panel form-panel" onSubmit={handleSubmit}>
           <h2>Thông tin khách hàng</h2>
-
-          <label>
-            Mã khách hàng (tự động)
-            <input value={nextCustomerCode} readOnly aria-readonly="true" />
-          </label>
 
           <label>
             Tên khách hàng
@@ -249,6 +452,9 @@ function App() {
             <label>
               Kênh
               <select value={form.kenh} onChange={(event) => updateField('kenh', event.target.value)}>
+                <option value="">
+                  chọn kênh
+                </option>
                 {CHANNEL_OPTIONS.map((channel) => (
                   <option value={channel} key={channel}>
                     {channel}
@@ -260,7 +466,11 @@ function App() {
             <label>
               Loại
               <select value={form.loai} onChange={(event) => updateField('loai', event.target.value)}>
+                <option value="">
+                  chọn loại
+                </option>
                 {(channelTypeMap[form.kenh] || []).map((type) => (
+
                   <option value={type} key={type}>
                     {type}
                   </option>
@@ -273,6 +483,9 @@ function App() {
             <label>
               Khu vực
               <select value={form.kv} onChange={(event) => updateField('kv', event.target.value)}>
+                <option value="">
+                  chọn Khu vực
+                </option>
                 {KV_OPTIONS.map((kv) => (
                   <option value={kv} key={kv}>
                     {kv}
@@ -284,6 +497,9 @@ function App() {
             <label>
               NPP
               <select value={form.npp} onChange={(event) => updateField('npp', event.target.value)}>
+                <option value="">
+                  chọn NPP
+                </option>
                 {(nppByKV[form.kv] || []).map((npp) => (
                   <option value={npp} key={npp}>
                     {npp}
@@ -291,8 +507,29 @@ function App() {
                 ))}
               </select>
             </label>
+            
           </div>
-
+<div className="card-block">
+              <h3>Ngành hàng kinh doanh</h3>
+              <p className="hint">Chọn các ngành hàng mà cửa hàng đang kinh doanh</p>
+              <div className="checkbox-group">
+                {nganh_hang_options.map((option) => (
+                  <label key={option} className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={form.nganh_hang.includes(option)}
+                      onChange={() => handleNganhHangChange(option)}
+                    />
+                    <span>{option}</span>
+                  </label>
+                ))}
+              </div>
+              {form.nganh_hang.length > 0 && (
+                <div className="selected-info">
+                  Đã chọn: {form.nganh_hang.length} ngành hàng
+                </div>
+              )}
+            </div>
           <div className="card-block">
             <div className="row-between">
               <h3>Xác thực vị trí</h3>
@@ -316,13 +553,10 @@ function App() {
 
           <div className="card-block">
             <h3>Ảnh thực tế</h3>
-            <p className="hint">Bấm "Chụp ảnh nhanh" để mở thẳng camera trên điện thoại.</p>
+            <p className="hint">Bấm chụp để mở camera điện thoại và chụp ảnh mới.</p>
             <div className="row-buttons">
-              <button type="button" onClick={handleOpenPhotoInput}>
-                Chụp ảnh nhanh
-              </button>
-              <button type="button" className="ghost" onClick={handleOpenPhotoInput}>
-                Chọn/chụp lại
+              <button type="button" onClick={handleOpenCamera}>
+                Chụp ảnh bằng camera
               </button>
             </div>
             <input
@@ -330,8 +564,8 @@ function App() {
               type="file"
               accept="image/*"
               capture="environment"
-              onChange={handlePhotoFileChange}
               className="hidden"
+              onChange={handlePhotoFileChange}
             />
             {photoDataUrl ? <img src={photoDataUrl} alt="Ảnh khách hàng" className="preview" /> : null}
           </div>
@@ -358,20 +592,22 @@ function App() {
             <p className="empty">Chưa có dữ liệu. Tạo khách hàng đầu tiên để bắt đầu.</p>
           ) : (
             <div className="customer-list">
-              {customers.map((customer) => (
+              {normalizeCustomers(customers).map((customer) => (
                 <article key={`${customer.ma}-${customer.ngay_tao}`} className="customer-item">
                   <div className="row-between">
                     <strong>{customer.ten}</strong>
-                    <span>{customer.ma}</span>
                   </div>
                   <p>{customer.kenh}</p>
                   <p>{customer.loai}</p>
                   <p>{customer.npp}</p>
+                  {Array.isArray(customer.nganh_hang) && customer.nganh_hang.length > 0 ? (
+                    <p>Ngành hàng: {customer.nganh_hang.join(', ')}</p>
+                  ) : null}
                   <p>
-                    ({customer.toa_do.vi_do.toFixed(6)}, {customer.toa_do.kinh_do.toFixed(6)}) -{' '}
-                    {customer.toa_do.do_chinh_xac_m}m
+                    ({Number(customer?.toa_do?.vi_do ?? 0).toFixed(6)},{' '}
+                    {Number(customer?.toa_do?.kinh_do ?? 0).toFixed(6)})
                   </p>
-                  <p>{formatDate(customer.ngay_tao)}</p>
+                  <p>{customer.ngay_tao ? formatDate(customer.ngay_tao) : '—'}</p>
                 </article>
               ))}
             </div>
