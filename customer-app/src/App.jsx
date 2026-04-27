@@ -215,6 +215,18 @@ function findNppFeatureByPoint(point, areasPrepared) {
   return null
 }
 
+function findKvByNpp(npp) {
+  if (!npp) {
+    return ''
+  }
+
+  return (
+    Object.entries(nppByKV).find(([, nppList]) =>
+      Array.isArray(nppList) ? nppList.includes(npp) : false
+    )?.[0] || ''
+  )
+}
+
 function App() {
   const [form, setForm] = useState(() => {
     const initial = createInitialForm()
@@ -233,6 +245,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState('')
   const [nppAreasPrepared, setNppAreasPrepared] = useState([])
   const [detectedNpp, setDetectedNpp] = useState('')
+  const [detectedKv, setDetectedKv] = useState('')
   const [locationData, setLocationData] = useState(null)
   const [photoDataUrl, setPhotoDataUrl] = useState('')
   const [loadingLocation, setLoadingLocation] = useState(false)
@@ -323,7 +336,16 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (!locationData || !miniMapRef.current) {
+    if (!locationData) {
+      if (miniMapInstanceRef.current) {
+        miniMapInstanceRef.current.remove()
+        miniMapInstanceRef.current = null
+      }
+      miniMapLayersRef.current = []
+      return
+    }
+
+    if (!miniMapRef.current) {
       return
     }
 
@@ -351,14 +373,28 @@ function App() {
     }
 
     const map = miniMapInstanceRef.current
-    miniMapLayersRef.current.forEach((layer) => map.removeLayer(layer))
+    miniMapLayersRef.current.forEach((layer) => {
+      if (map.hasLayer(layer)) {
+        map.removeLayer(layer)
+      }
+    })
     miniMapLayersRef.current = []
 
     const currentPoint = [locationData.lng, locationData.lat]
     const currentLatLng = [locationData.lat, locationData.lng]
     const matchedFeature = findNppFeatureByPoint(currentPoint, nppAreasPrepared)
     const matchedNpp = matchedFeature?.properties?.npp || ''
+    const matchedKv = findKvByNpp(matchedNpp)
     setDetectedNpp(matchedNpp)
+    setDetectedKv(matchedKv)
+
+    if (matchedNpp && matchedKv) {
+      setForm((prev) => ({
+        ...prev,
+        kv: matchedKv,
+        npp: matchedNpp,
+      }))
+    }
 
     const markerLayer = L.circleMarker(currentLatLng, {
       radius: 6,
@@ -392,8 +428,11 @@ function App() {
 
       map.fitBounds(featureLayer.getBounds(), { padding: [20, 20], maxZoom: 17 })
     } else {
+      setDetectedKv('')
       map.setView(currentLatLng, 16)
     }
+
+    map.invalidateSize()
   }, [locationData, nppAreasPrepared])
 
   useEffect(() => {
@@ -469,6 +508,12 @@ function App() {
     setLoadingLocation(true)
 
     try {
+      if (miniMapInstanceRef.current) {
+        miniMapInstanceRef.current.remove()
+        miniMapInstanceRef.current = null
+        miniMapLayersRef.current = []
+      }
+
       if (!window.isSecureContext) {
         throw new Error('Ứng dụng cần chạy trên HTTPS hoặc localhost để lấy định vị chuẩn.')
       }
@@ -545,6 +590,7 @@ function App() {
     })
     setLocationData(null)
     setDetectedNpp('')
+    setDetectedKv('')
     setPhotoDataUrl('')
     setError('')
   }
@@ -681,6 +727,7 @@ function App() {
                 ))}
               </select>
             </label>
+
             <label>
               Loại
               <select value={form.loai} onChange={(event) => updateField('loai', event.target.value)}>
@@ -754,7 +801,11 @@ function App() {
               <span className={`status ${locationBadge.tone}`}>{locationBadge.label}</span>
             </div>
             <button type="button" onClick={handleGetLocation} disabled={loadingLocation}>
-              {loadingLocation ? 'Đang lấy vị trí...' : 'Lấy vị trí chuẩn'}
+              {loadingLocation
+                ? 'Đang lấy vị trí...'
+                : locationData
+                  ? 'Lấy lại vị trí'
+                  : 'Lấy vị trí chuẩn'}
             </button>
             {locationData && (
               <ul className="meta-list">
@@ -767,15 +818,21 @@ function App() {
                 <li>Điểm tin cậy: {locationData.trustScore}/100</li> */}
               </ul>
             )}
+    
+
             {locationData ? (
               <div className="location-map-card">
                 <p className="hint">
                   Khu vực NPP theo GPS:{' '}
                   <strong>{detectedNpp || 'Đang xác định'}</strong>
                 </p>
+                <p className="hint">
+                  Khu vực theo NPP: <strong>{detectedKv || 'Đang xác định'}</strong>
+                </p>
                 <div ref={miniMapRef} className="mini-map-frame" />
               </div>
             ) : null}
+          
           </div>
 
           <div className="card-block">
