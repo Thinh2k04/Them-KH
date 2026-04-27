@@ -48,6 +48,17 @@
   gap: 14px;
 }
 
+.login-panel {
+  max-width: 460px;
+  margin: 40px auto 0;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .form-panel h2,
 .list-panel h2 {
   margin: 0 0 8px;
@@ -284,6 +295,77 @@ button:disabled {
   font-size: 14px;
 }
 
+.detail-btn {
+  margin-top: 10px;
+  min-height: 42px;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 999;
+}
+
+.modal-panel {
+  width: min(760px, 100%);
+  max-height: 92vh;
+  overflow: auto;
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-soft);
+  padding: 14px;
+}
+
+.modal-header h3 {
+  margin: 0;
+}
+
+.close-btn {
+  min-height: 40px;
+}
+
+.modal-content {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.modal-content p {
+  margin: 0;
+  color: var(--text);
+}
+
+.modal-image {
+  width: 100%;
+  max-height: 360px;
+  object-fit: contain;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: #000;
+}
+
+.map-link {
+  display: inline-flex;
+  width: fit-content;
+  color: #0f4cdb;
+  text-decoration: underline;
+  font-weight: 600;
+}
+
+.map-frame {
+  width: 100%;
+  min-height: 260px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
 .empty {
   margin-top: 20px;
   color: var(--muted);
@@ -346,5 +428,9 @@ button:disabled {
 @media (max-width: 420px) {
   .row-buttons {
     grid-template-columns: 1fr;
+  }
+
+  .modal-panel {
+    padding: 12px 10px;
   }
 }

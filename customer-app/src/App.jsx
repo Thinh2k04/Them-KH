@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  ADMIN_CODE_MAP,
   CHANNEL_OPTIONS,
   CHECK_LABELS,
   KV_OPTIONS,
@@ -109,6 +110,23 @@ function toRawBase64(value) {
   return (matched?.[1] || stringValue).replace(/\s+/g, '')
 }
 
+function toImageDataUrl(rawBase64) {
+  if (!rawBase64) {
+    return ''
+  }
+
+  const trimmed = String(rawBase64).trim()
+  if (!trimmed) {
+    return ''
+  }
+
+  if (/^data:image\//i.test(trimmed)) {
+    return trimmed
+  }
+
+  return `data:image/jpeg;base64,${trimmed}`
+}
+
 function App() {
   const [form, setForm] = useState(() => {
     const initial = createInitialForm()
@@ -122,11 +140,15 @@ function App() {
     }
   })
   const [customers, setCustomers] = useState([])
+  const [selectedCustomer, setSelectedCustomer] = useState(null)
+  const [loginCode, setLoginCode] = useState('')
+  const [currentUser, setCurrentUser] = useState('')
   const [locationData, setLocationData] = useState(null)
   const [photoDataUrl, setPhotoDataUrl] = useState('')
   const [loadingLocation, setLoadingLocation] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [loginError, setLoginError] = useState('')
 
   const fileInputRef = useRef(null)
 
@@ -166,6 +188,42 @@ function App() {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    if (!selectedCustomer) {
+      return undefined
+    }
+
+    function handleEsc(event) {
+      if (event.key === 'Escape') {
+        setSelectedCustomer(null)
+      }
+    }
+
+    window.addEventListener('keydown', handleEsc)
+    return () => window.removeEventListener('keydown', handleEsc)
+  }, [selectedCustomer])
+
+  function handleLoginSubmit(event) {
+    event.preventDefault()
+    setLoginError('')
+
+    const normalizedCode = String(loginCode || '').trim().toUpperCase()
+    const userName = ADMIN_CODE_MAP[normalizedCode]
+    if (!userName) {
+      setLoginError('Mã đăng nhập không đúng. Vui lòng nhập lại.')
+      return
+    }
+
+    setCurrentUser(userName)
+    setLoginCode('')
+  }
+
+  function handleLogout() {
+    setCurrentUser('')
+    setLoginCode('')
+    setLoginError('')
+  }
 
   function updateField(key, value) {
     setForm((prev) => {
@@ -332,6 +390,7 @@ function App() {
           vi_do: locationData.lat,
           kinh_do: locationData.lng,
         },
+        nguoi_tao: currentUser,
         anh_thuc_te: toRawBase64(photoDataUrl),
         ngay_tao: new Date().toISOString(),
       }
@@ -346,6 +405,30 @@ function App() {
     }
   }
 
+  if (!currentUser) {
+    return (
+      <main className="page">
+        <section className="panel login-panel">
+          <h2>Đăng nhập</h2>
+          <p className="hint">Nhập mã quản trị để vào hệ thống thêm khách hàng.</p>
+          <form onSubmit={handleLoginSubmit} className="login-form">
+            <label>
+              Mã đăng nhập
+              <input
+                value={loginCode}
+                onChange={(event) => setLoginCode(event.target.value.toUpperCase())}
+                placeholder="Ví dụ: ADTHANH"
+                autoComplete="off"
+              />
+            </label>
+            {loginError ? <p className="error">{loginError}</p> : null}
+            <button type="submit">Vào hệ thống</button>
+          </form>
+        </section>
+      </main>
+    )
+  }
+
   return (
     <main className="page">
       <header className="page-header">
@@ -353,7 +436,9 @@ function App() {
           <p className="eyebrow">Field Sales</p>
           <h1>Thêm khách hàng mới</h1>
           <p className="subtitle">Lấy vị trí GPS chuẩn, chụp ảnh thực tế, và lưu theo mẫu dữ liệu của bạn.</p>
+          <p className="subtitle">Đăng nhập: <strong>{currentUser}</strong></p>
         </div>
+        <button type="button" className="ghost" onClick={handleLogout}>Đăng xuất</button>
       </header>
 
       <section className="layout">
@@ -524,6 +609,7 @@ function App() {
                   <p>{customer.kenh}</p>
                   <p>{customer.loai}</p>
                   <p>{customer.npp}</p>
+                  <p>NV tạo: {customer.nguoi_tao || '—'}</p>
                   {Array.isArray(customer.nganh_hang) && customer.nganh_hang.length > 0 ? (
                     <p>Ngành hàng: {customer.nganh_hang.join(', ')}</p>
                   ) : null}
@@ -532,12 +618,89 @@ function App() {
                     {Number(customer?.toa_do?.kinh_do ?? 0).toFixed(6)})
                   </p>
                   <p>{customer.ngay_tao ? formatDate(customer.ngay_tao) : '—'}</p>
+                  <button
+                    type="button"
+                    className="ghost detail-btn"
+                    onClick={() => setSelectedCustomer(customer)}
+                  >
+                    Xem chi tiết
+                  </button>
                 </article>
               ))}
             </div>
           )}
         </aside>
       </section>
+
+      {selectedCustomer ? (
+        <div
+          className="modal-overlay"
+          role="presentation"
+          onClick={() => setSelectedCustomer(null)}
+        >
+          <section
+            className="modal-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Chi tiết khách hàng"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="row-between modal-header">
+              <h3>Chi tiết khách hàng</h3>
+              <button type="button" className="ghost close-btn" onClick={() => setSelectedCustomer(null)}>
+                Đóng
+              </button>
+            </div>
+
+            <div className="modal-content">
+              <p><strong>Mã KH:</strong> {selectedCustomer.ma || '—'}</p>
+              <p><strong>Tên KH:</strong> {selectedCustomer.ten || '—'}</p>
+              <p><strong>Kênh:</strong> {selectedCustomer.kenh || '—'}</p>
+              <p><strong>Loại:</strong> {selectedCustomer.loai || '—'}</p>
+              <p><strong>Khu vực:</strong> {selectedCustomer.kv || '—'}</p>
+              <p><strong>NPP:</strong> {selectedCustomer.npp || '—'}</p>
+              <p><strong>Nhân viên tạo:</strong> {selectedCustomer.nguoi_tao || '—'}</p>
+              <p>
+                <strong>Ngành hàng:</strong>{' '}
+                {Array.isArray(selectedCustomer.nganh_hang) && selectedCustomer.nganh_hang.length
+                  ? selectedCustomer.nganh_hang.join(', ')
+                  : '—'}
+              </p>
+              <p>
+                <strong>Tọa độ:</strong>{' '}
+                {Number(selectedCustomer?.toa_do?.vi_do ?? 0).toFixed(8)},{' '}
+                {Number(selectedCustomer?.toa_do?.kinh_do ?? 0).toFixed(8)}
+              </p>
+              <p><strong>Ngày tạo:</strong> {selectedCustomer.ngay_tao ? formatDate(selectedCustomer.ngay_tao) : '—'}</p>
+
+              {selectedCustomer.anh_thuc_te ? (
+                <img
+                  src={toImageDataUrl(selectedCustomer.anh_thuc_te)}
+                  alt={`Ảnh thực tế ${selectedCustomer.ten || ''}`}
+                  className="modal-image"
+                />
+              ) : (
+                <p>Chưa có ảnh thực tế.</p>
+              )}
+
+              <a
+                href={`https://www.google.com/maps?q=${selectedCustomer?.toa_do?.vi_do},${selectedCustomer?.toa_do?.kinh_do}`}
+                target="_blank"
+                rel="noreferrer"
+                className="map-link"
+              >
+                Xem vị trí trên Google Maps
+              </a>
+              <iframe
+                title="Bản đồ vị trí khách hàng"
+                className="map-frame"
+                loading="lazy"
+                src={`https://maps.google.com/maps?q=${selectedCustomer?.toa_do?.vi_do},${selectedCustomer?.toa_do?.kinh_do}&z=16&output=embed`}
+              />
+            </div>
+          </section>
+        </div>
+      ) : null}
     </main>
   )
 }

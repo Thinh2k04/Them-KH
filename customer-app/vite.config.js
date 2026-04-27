@@ -80,6 +80,7 @@ function dataJsonApiPlugin() {
         loai: incoming.loai || '',
         kv: incoming.kv || '',
         npp: incoming.npp || '',
+        nguoi_tao: incoming.nguoi_tao || '',
         nganh_hang: Array.isArray(incoming.nganh_hang) ? incoming.nganh_hang : [],
         toa_do: {
           vi_do: incoming?.toa_do?.vi_do,

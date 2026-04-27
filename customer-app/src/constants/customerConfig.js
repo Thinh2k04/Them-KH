@@ -109,3 +109,11 @@ export const CHECK_LABELS = {
   timezoneOk: 'Múi giờ thiết bị hợp lệ',
   onlineOk: 'Thiết bị đang online',
 }
+
+export const ADMIN_CODE_MAP = {
+  ADTHANH: 'Ngô Ngọc Thành',
+  ADHAI: 'Nguyễn Đình Hải',
+  ADHA: 'Nguyễn Đình Hà',
+  ADDUC: 'Nguyễn Anh Đức',
+  ADHUNG: 'Nguyễn Mạnh Hùng',
+}
