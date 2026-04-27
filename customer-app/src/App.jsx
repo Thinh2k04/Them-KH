@@ -648,7 +648,7 @@ function App() {
           <p className="subtitle">Lấy vị trí GPS chuẩn, chụp ảnh thực tế, và lưu theo mẫu dữ liệu của bạn.</p>
           <p className="subtitle">Đăng nhập: <strong>{currentUser}</strong></p>
         </div>
-        <button type="button" className="ghost" onClick={handleLogout}>Đăng xuất</button>
+        {/* <button type="button" className="ghost" onClick={handleLogout}>Đăng xuất</button> */}
       </header>
 
       <section className="layout">
@@ -681,7 +681,6 @@ function App() {
                 ))}
               </select>
             </label>
-
             <label>
               Loại
               <select value={form.loai} onChange={(event) => updateField('loai', event.target.value)}>
@@ -772,7 +771,7 @@ function App() {
               <div className="location-map-card">
                 <p className="hint">
                   Khu vực NPP theo GPS:{' '}
-                  <strong>{detectedNpp || 'Chưa tìm thấy trong vùng NPP đã khai báo'}</strong>
+                  <strong>{detectedNpp || 'Đang xác định'}</strong>
                 </p>
                 <div ref={miniMapRef} className="mini-map-frame" />
               </div>
