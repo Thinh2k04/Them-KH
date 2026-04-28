@@ -61,3 +61,9 @@ Dien day du quy tac cu the de Copilot lam dung 100%:
 
 ## 8) Cam ket thuc thi
 Khi lam viec trong workspace nay, Copilot uu tien tuan thu file huong dan nay. Neu yeu cau moi mau thuan voi quy tac trong file, Copilot phai canh bao va hoi lai truoc khi thay doi.
+
+## 9) backend 
+- [ ] Quy dinh cau truc API (endpoint, method, params, response)
+- [ ] Quy dinh cau truc database (schema, relations) database sql sever locatiom 1433
+- [ ] Quy dinh cau truc service (business logic, error handling)
+- [ ] Quy dinh cau truc controller (request handling, response formatting)
