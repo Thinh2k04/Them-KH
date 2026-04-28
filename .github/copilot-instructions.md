@@ -1,4 +1,16 @@
-# Huong dan lam viec theo cau truc cua ban
+if (!photoUrl) {
+  throw new Error('Bạn cần chụp và upload ảnh cửa hàng trước khi lưu khách hàng.')
+}
+
+const payload = {
+  ten: form.ten.trim(),
+  loai: form.loai,
+  npp: form.npp.trim(),
+  nguoi_tao: currentUserCode || currentUser,
+  anh: photoUrl, // gửi đường dẫn ảnh
+  vi_do: Number(locationData.lat.toFixed(8)),
+  kinh_do: Number(locationData.lng.toFixed(8)),
+}# Huong dan lam viec theo cau truc cua ban
 
 Muc tieu: Copilot phai lam dung theo cau truc ban quy dinh, khong tu y thay doi.
 

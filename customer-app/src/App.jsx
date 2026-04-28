@@ -17,6 +17,7 @@ import 'leaflet/dist/leaflet.css'
 import './App.css'
 
 const CUSTOMER_API_URL = 'https://jsk9x6z4-3000.asse.devtunnels.ms/api/khachhang/'
+const API_ORIGIN = new URL(CUSTOMER_API_URL).origin
 
 function normalizeNganhHang(value) {
   if (Array.isArray(value)) {
@@ -40,7 +41,7 @@ function normalizeCustomers(rawValue) {
     list.map((customer) => ({
       ...customer,
       id: Number(customer?.id),
-      anh_base64: customer?.anh_base64 || '',
+      anh: customer?.anh || customer?.anh_base64 || '',
       vi_do:
         customer?.vi_do === null || customer?.vi_do === undefined ? null : Number(customer.vi_do),
       kinh_do:
@@ -92,6 +93,23 @@ async function saveCustomer(customerPayload) {
   }
 }
 
+async function uploadCustomerImage(file) {
+  const formData = new FormData()
+  formData.append('anh', file)
+
+  const response = await fetch(`${API_ORIGIN}/upload`, {
+    method: 'POST',
+    body: formData,
+  })
+
+  const parsed = await response.json().catch(() => null)
+  if (!response.ok || !parsed?.success || !parsed?.path) {
+    throw new Error(parsed?.message || 'Upload ảnh thất bại.')
+  }
+
+  return String(parsed.path).trim()
+}
+
 function resizeImageFile(file, maxDimension = 960, quality = 0.72) {
   return new Promise((resolve, reject) => {
     const objectUrl = URL.createObjectURL(file)
@@ -128,28 +146,30 @@ function resizeImageFile(file, maxDimension = 960, quality = 0.72) {
   })
 }
 
-function toRawBase64(value) {
-  if (!value) {
+function toImageDataUrl(imageValue) {
+  if (!imageValue) {
     return ''
   }
 
-  const stringValue = String(value).trim()
-  const matched = /^data:.*;base64,(.+)$/i.exec(stringValue)
-  return (matched?.[1] || stringValue).replace(/\s+/g, '')
-}
-
-function toImageDataUrl(rawBase64) {
-  if (!rawBase64) {
-    return ''
-  }
-
-  const trimmed = String(rawBase64).trim()
+  const trimmed = String(imageValue).trim()
   if (!trimmed) {
     return ''
   }
 
   if (/^data:image\//i.test(trimmed)) {
     return trimmed
+  }
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed
+  }
+
+  if (trimmed.startsWith('/')) {
+    return `${API_ORIGIN}${trimmed}`
+  }
+
+  if (/^[A-Za-z0-9_\-/]+\.(jpg|jpeg|png|webp|gif)$/i.test(trimmed)) {
+    return `${API_ORIGIN}/${trimmed.replace(/^\/+/, '')}`
   }
 
   return `data:image/jpeg;base64,${trimmed}`
@@ -272,6 +292,7 @@ function App() {
   const [detectedNpp, setDetectedNpp] = useState('')
   const [detectedKv, setDetectedKv] = useState('')
   const [locationData, setLocationData] = useState(null)
+  const [photoFile, setPhotoFile] = useState(null)
   const [photoDataUrl, setPhotoDataUrl] = useState('')
   const [loadingLocation, setLoadingLocation] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -586,6 +607,7 @@ function App() {
 
     try {
       const optimizedDataUrl = await resizeImageFile(file)
+      setPhotoFile(file)
       setPhotoDataUrl(optimizedDataUrl)
     } catch {
       setError('Không thể xử lý ảnh từ camera. Vui lòng thử lại.')
@@ -607,6 +629,7 @@ function App() {
     setLocationData(null)
     setDetectedNpp('')
     setDetectedKv('')
+    setPhotoFile(null)
     setPhotoDataUrl('')
     setError('')
   }
@@ -650,13 +673,18 @@ function App() {
       if (!photoDataUrl) {
         throw new Error('Bạn cần chụp ảnh cửa hàng trước khi lưu khách hàng.')
       }
+      if (!photoFile) {
+        throw new Error('Thiếu file ảnh gốc để upload. Vui lòng chụp lại.')
+      }
+
+      const uploadedPath = await uploadCustomerImage(photoFile)
 
       const payload = {
         ten: form.ten.trim(),
         loai: form.loai,
         npp: form.npp.trim(),
         nguoi_tao: currentUserCode || currentUser,
-        anh_base64: toRawBase64(photoDataUrl),
+        anh: uploadedPath,
         vi_do: Number(locationData.lat.toFixed(8)),
         kinh_do: Number(locationData.lng.toFixed(8)),
       }
@@ -948,9 +976,9 @@ function App() {
               </p>
               <p><strong>Ngày tạo:</strong> {selectedCustomer.ngay_tao ? formatDate(selectedCustomer.ngay_tao) : '—'}</p>
 
-              {selectedCustomer.anh_base64 ? (
+              {selectedCustomer.anh ? (
                 <img
-                  src={toImageDataUrl(selectedCustomer.anh_base64)}
+                  src={toImageDataUrl(selectedCustomer.anh)}
                   alt={`Ảnh thực tế ${selectedCustomer.ten || ''}`}
                   className="modal-image"
                 />
