@@ -16,6 +16,8 @@ import { createInitialForm, formatDate } from './utils/customerHelpers'
 import 'leaflet/dist/leaflet.css'
 import './App.css'
 
+const CUSTOMER_API_URL = 'https://jsk9x6z4-3000.asse.devtunnels.ms/api/khachhang/'
+
 function normalizeNganhHang(value) {
   if (Array.isArray(value)) {
     return value
@@ -37,35 +39,57 @@ function normalizeCustomers(rawValue) {
   const toNormalizedArray = (list) =>
     list.map((customer) => ({
       ...customer,
-      nganh_hang: normalizeNganhHang(customer?.nganh_hang),
+      id: Number(customer?.id),
+      anh_base64: customer?.anh_base64 || '',
+      vi_do:
+        customer?.vi_do === null || customer?.vi_do === undefined ? null : Number(customer.vi_do),
+      kinh_do:
+        customer?.kinh_do === null || customer?.kinh_do === undefined ? null : Number(customer.kinh_do),
+      ngay_tao: customer?.ngay_tao || '',
     }))
 
   if (Array.isArray(rawValue)) {
     return toNormalizedArray(rawValue)
   }
 
-  if (rawValue && typeof rawValue === 'object' && Array.isArray(rawValue.khach_hang)) {
-    return toNormalizedArray(rawValue.khach_hang)
+  if (rawValue && typeof rawValue === 'object' && Array.isArray(rawValue.data)) {
+    return toNormalizedArray(rawValue.data)
   }
 
   return []
 }
 
-async function saveCustomerToDataFile(customerPayload) {
-  const response = await fetch('/api/customers', {
+async function fetchCustomers() {
+  const response = await fetch(CUSTOMER_API_URL, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    throw new Error('Không thể tải danh sách khách hàng từ API.')
+  }
+
+  const parsed = await response.json()
+  return normalizeCustomers(parsed)
+}
+
+async function saveCustomer(customerPayload) {
+  const response = await fetch(CUSTOMER_API_URL, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
+      'Content-Type': 'application/json; charset=UTF-8',
+      Accept: 'application/json',
+      'Accept-Charset': 'utf-8',
     },
     body: JSON.stringify(customerPayload),
   })
 
   if (!response.ok) {
-    throw new Error('Không thể lưu dữ liệu vào data.json.')
+    const parsed = await response.json().catch(() => null)
+    throw new Error(parsed?.message || 'Không thể lưu khách hàng lên API.')
   }
-
-  const parsed = await response.json()
-  return normalizeCustomers(parsed)
 }
 
 function resizeImageFile(file, maxDimension = 960, quality = 0.72) {
@@ -242,6 +266,7 @@ function App() {
   const [customers, setCustomers] = useState([])
   const [selectedCustomer, setSelectedCustomer] = useState(null)
   const [loginCode, setLoginCode] = useState('')
+  const [currentUserCode, setCurrentUserCode] = useState('')
   const [currentUser, setCurrentUser] = useState('')
   const [nppAreasPrepared, setNppAreasPrepared] = useState([])
   const [detectedNpp, setDetectedNpp] = useState('')
@@ -273,13 +298,7 @@ function App() {
 
     async function loadInitialData() {
       try {
-        const response = await fetch('/data.json', { cache: 'no-store' })
-        if (!response.ok) {
-          return
-        }
-
-        const parsed = await response.json()
-        const parsedCustomers = normalizeCustomers(parsed)
+        const parsedCustomers = await fetchCustomers()
 
         if (!cancelled) {
           setCustomers(parsedCustomers)
@@ -384,17 +403,6 @@ function App() {
     const currentLatLng = [locationData.lat, locationData.lng]
     const matchedFeature = findNppFeatureByPoint(currentPoint, nppAreasPrepared)
     const matchedNpp = matchedFeature?.properties?.npp || ''
-    const matchedKv = findKvByNpp(matchedNpp)
-    setDetectedNpp(matchedNpp)
-    setDetectedKv(matchedKv)
-
-    if (matchedNpp && matchedKv) {
-      setForm((prev) => ({
-        ...prev,
-        kv: matchedKv,
-        npp: matchedNpp,
-      }))
-    }
 
     const markerLayer = L.circleMarker(currentLatLng, {
       radius: 6,
@@ -428,7 +436,6 @@ function App() {
 
       map.fitBounds(featureLayer.getBounds(), { padding: [20, 20], maxZoom: 17 })
     } else {
-      setDetectedKv('')
       map.setView(currentLatLng, 16)
     }
 
@@ -455,14 +462,9 @@ function App() {
       return
     }
 
+    setCurrentUserCode(normalizedCode)
     setCurrentUser(userName)
     setLoginCode('')
-  }
-
-  function handleLogout() {
-    setCurrentUser('')
-    setLoginCode('')
-    setLoginError('')
   }
 
   function updateField(key, value) {
@@ -528,6 +530,20 @@ function App() {
       }
 
       const verified = await collectVerifiedLocation(3)
+      const matchedFeature = findNppFeatureByPoint([verified.lng, verified.lat], nppAreasPrepared)
+      const matchedNpp = matchedFeature?.properties?.npp || ''
+      const matchedKv = findKvByNpp(matchedNpp)
+
+      setDetectedNpp(matchedNpp)
+      setDetectedKv(matchedKv)
+      if (matchedNpp && matchedKv) {
+        setForm((prev) => ({
+          ...prev,
+          kv: matchedKv,
+          npp: matchedNpp,
+        }))
+      }
+
       setLocationData(verified)
 
       if (!verified.trusted) {
@@ -637,22 +653,17 @@ function App() {
 
       const payload = {
         ten: form.ten.trim(),
-        kenh: form.kenh,
         loai: form.loai,
-        kv: form.kv,
         npp: form.npp.trim(),
-        nganh_hang: selectedNganhHang,
-        toa_do: {
-          vi_do: locationData.lat,
-          kinh_do: locationData.lng,
-        },
-        nguoi_tao: currentUser,
-        anh_thuc_te: toRawBase64(photoDataUrl),
-        ngay_tao: new Date().toISOString(),
+        nguoi_tao: currentUserCode || currentUser,
+        anh_base64: toRawBase64(photoDataUrl),
+        vi_do: Number(locationData.lat.toFixed(8)),
+        kinh_do: Number(locationData.lng.toFixed(8)),
       }
 
-      const savedCustomers = await saveCustomerToDataFile(payload)
-      setCustomers(savedCustomers)
+      await saveCustomer(payload)
+      const latestCustomers = await fetchCustomers()
+      setCustomers(latestCustomers)
       resetForm()
     } catch (err) {
       setError(err.message || 'Không thể lưu khách hàng.')
@@ -692,7 +703,7 @@ function App() {
           <p className="eyebrow">Field Sales</p>
           <h1>Thêm khách hàng mới</h1>
           <p className="subtitle">Lấy vị trí GPS chuẩn, chụp ảnh thực tế, và lưu theo mẫu dữ liệu của bạn.</p>
-          <p className="subtitle">Đăng nhập: <strong>{currentUser}</strong></p>
+          <p className="subtitle">Đăng nhập: <strong>{currentUser}</strong>{currentUserCode ? ` (${currentUserCode})` : ''}</p>
         </div>
         {/* <button type="button" className="ghost" onClick={handleLogout}>Đăng xuất</button> */}
       </header>
@@ -877,20 +888,17 @@ function App() {
           ) : (
             <div className="customer-list">
               {normalizeCustomers(customers).map((customer) => (
-                <article key={`${customer.ma}-${customer.ngay_tao}`} className="customer-item">
+                <article key={customer.id || `${customer.ten}-${customer.ngay_tao}`} className="customer-item">
                   <div className="row-between">
                     <strong>{customer.ten}</strong>
+                    <span className="count">#{customer.id || 'moi'}</span>
                   </div>
-                  <p>{customer.kenh}</p>
                   <p>{customer.loai}</p>
                   <p>{customer.npp}</p>
                   <p>NV tạo: {customer.nguoi_tao || '—'}</p>
-                  {Array.isArray(customer.nganh_hang) && customer.nganh_hang.length > 0 ? (
-                    <p>Ngành hàng: {customer.nganh_hang.join(', ')}</p>
-                  ) : null}
                   <p>
-                    ({Number(customer?.toa_do?.vi_do ?? 0).toFixed(6)},{' '}
-                    {Number(customer?.toa_do?.kinh_do ?? 0).toFixed(6)})
+                    ({customer.vi_do === null ? '—' : Number(customer.vi_do).toFixed(8)},{' '}
+                    {customer.kinh_do === null ? '—' : Number(customer.kinh_do).toFixed(8)})
                   </p>
                   <p>{customer.ngay_tao ? formatDate(customer.ngay_tao) : '—'}</p>
                   <button
@@ -928,29 +936,21 @@ function App() {
             </div>
 
             <div className="modal-content">
-              <p><strong>Mã KH:</strong> {selectedCustomer.ma || '—'}</p>
+              <p><strong>ID:</strong> {selectedCustomer.id || '—'}</p>
               <p><strong>Tên KH:</strong> {selectedCustomer.ten || '—'}</p>
-              <p><strong>Kênh:</strong> {selectedCustomer.kenh || '—'}</p>
               <p><strong>Loại:</strong> {selectedCustomer.loai || '—'}</p>
-              <p><strong>Khu vực:</strong> {selectedCustomer.kv || '—'}</p>
               <p><strong>NPP:</strong> {selectedCustomer.npp || '—'}</p>
               <p><strong>Nhân viên tạo:</strong> {selectedCustomer.nguoi_tao || '—'}</p>
               <p>
-                <strong>Ngành hàng:</strong>{' '}
-                {Array.isArray(selectedCustomer.nganh_hang) && selectedCustomer.nganh_hang.length
-                  ? selectedCustomer.nganh_hang.join(', ')
-                  : '—'}
-              </p>
-              <p>
                 <strong>Tọa độ:</strong>{' '}
-                {Number(selectedCustomer?.toa_do?.vi_do ?? 0).toFixed(8)},{' '}
-                {Number(selectedCustomer?.toa_do?.kinh_do ?? 0).toFixed(8)}
+                {selectedCustomer.vi_do === null ? '—' : Number(selectedCustomer.vi_do).toFixed(8)},{' '}
+                {selectedCustomer.kinh_do === null ? '—' : Number(selectedCustomer.kinh_do).toFixed(8)}
               </p>
               <p><strong>Ngày tạo:</strong> {selectedCustomer.ngay_tao ? formatDate(selectedCustomer.ngay_tao) : '—'}</p>
 
-              {selectedCustomer.anh_thuc_te ? (
+              {selectedCustomer.anh_base64 ? (
                 <img
-                  src={toImageDataUrl(selectedCustomer.anh_thuc_te)}
+                  src={toImageDataUrl(selectedCustomer.anh_base64)}
                   alt={`Ảnh thực tế ${selectedCustomer.ten || ''}`}
                   className="modal-image"
                 />
@@ -958,20 +958,26 @@ function App() {
                 <p>Chưa có ảnh thực tế.</p>
               )}
 
-              <a
-                href={`https://www.google.com/maps?q=${selectedCustomer?.toa_do?.vi_do},${selectedCustomer?.toa_do?.kinh_do}`}
-                target="_blank"
-                rel="noreferrer"
-                className="map-link"
-              >
-                Xem vị trí trên Google Maps
-              </a>
-              <iframe
-                title="Bản đồ vị trí khách hàng"
-                className="map-frame"
-                loading="lazy"
-                src={`https://maps.google.com/maps?q=${selectedCustomer?.toa_do?.vi_do},${selectedCustomer?.toa_do?.kinh_do}&z=16&output=embed`}
-              />
+              {selectedCustomer.vi_do !== null && selectedCustomer.kinh_do !== null ? (
+                <>
+                  <a
+                    href={`https://www.google.com/maps?q=${selectedCustomer.vi_do},${selectedCustomer.kinh_do}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="map-link"
+                  >
+                    Xem vị trí trên Google Maps
+                  </a>
+                  <iframe
+                    title="Bản đồ vị trí khách hàng"
+                    className="map-frame"
+                    loading="lazy"
+                    src={`https://maps.google.com/maps?q=${selectedCustomer.vi_do},${selectedCustomer.kinh_do}&z=16&output=embed`}
+                  />
+                </>
+              ) : (
+                <p>Chưa có tọa độ GPS.</p>
+              )}
             </div>
           </section>
         </div>

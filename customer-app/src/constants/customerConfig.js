@@ -1,5 +1,3 @@
-export const STORAGE_KEY = 'khach_hang_data_v1'
-
 export const nppByKV = {
   KV1: [
     'NPP Bảo Lâm',
