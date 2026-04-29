@@ -32,7 +32,7 @@ function buildSecurityChecks(summary) {
     speedOk: summary.maxSpeedKmH <= 120,
     signalStableOk: summary.accuracySpread <= 15,
     noAutomationFlag: !webdriverFlag,
-    timezoneOk: timezone === 'Asia/Ho_Chi_Minh',
+    // timezoneOk: timezone === 'Asia/Ho_Chi_Minh',
     onlineOk: networkInfo.online !== false,
   }
 
@@ -128,7 +128,7 @@ export async function collectVerifiedLocation(sampleCount = 3) {
     maxSpeedKmH,
     timestamp: newestTimestamp,
     trustScore: security.trustScore,
-    trusted: security.trustScore >= 85,
+    trusted: Object.values(security.checks).every(Boolean),
     checks: security.checks,
     timezone: security.timezone,
     networkInfo: security.networkInfo,

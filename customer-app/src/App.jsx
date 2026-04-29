@@ -14,10 +14,14 @@ import {
 import { collectVerifiedLocation } from './services/locationService'
 import { createInitialForm, formatDate } from './utils/customerHelpers'
 import 'leaflet/dist/leaflet.css'
+import 'leaflet.markercluster'
+import 'leaflet.markercluster/dist/MarkerCluster.css'
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 import './App.css'
 
 const CUSTOMER_API_URL = 'https://jsk9x6z4-3000.asse.devtunnels.ms/api/khachhang/'
 const API_ORIGIN = new URL(CUSTOMER_API_URL).origin
+const DMS_CUSTOMER_API_URL = 'https://jsk9x6z4-3000.asse.devtunnels.ms/api/khachhang/dms'
 
 function normalizeNganhHang(value) {
   if (Array.isArray(value)) {
@@ -271,6 +275,78 @@ function findKvByNpp(npp) {
   )
 }
 
+function normalizeDmsCustomers(rawValue) {
+  const list = Array.isArray(rawValue) ? rawValue : Array.isArray(rawValue?.data) ? rawValue.data : []
+  return list
+    .map((item) => {
+      const lat = Number(item?.vi_do)
+      const lng = Number(item?.kinh_do)
+      return {
+        ...item,
+        vi_do_num: Number.isFinite(lat) ? lat : null,
+        kinh_do_num: Number.isFinite(lng) ? lng : null,
+      }
+    })
+    .filter((item) => item.vi_do_num !== null && item.kinh_do_num !== null)
+}
+
+async function fetchDmsCustomersByNpp(nppName) {
+  if (!nppName) {
+    return []
+  }
+
+  const response = await fetch(DMS_CUSTOMER_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({ phong_ban_nv: nppName }),
+  })
+
+  if (!response.ok) {
+    throw new Error('Không thể tải khách hàng DMS theo NPP.')
+  }
+
+  const parsed = await response.json().catch(() => [])
+  return normalizeDmsCustomers(parsed)
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function createDmsPopupContent(customer) {
+  const fields = [
+    ['Mã KH', customer?.makh],
+    ['Tên KH', customer?.tenkh],
+    ['Trạng thái', customer?.trang_thai_kh],
+    ['Loại KH', customer?.loai_kh],
+    ['Kênh', customer?.kenh],
+    ['Địa chỉ', customer?.dia_chi],
+    ['ĐC giao hàng', customer?.dc_giao_hangnh],
+    ['Liên hệ', customer?.nguoi_lien_he],
+    ['SĐT', customer?.sdt],
+    ['Email', customer?.email],
+  ]
+
+  const metaRows = fields
+    .filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== '')
+    .map(([label, value]) => `<p><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</p>`)
+    .join('')
+
+  const image = customer?.hinh_anh
+    ? `<img src="${escapeHtml(customer.hinh_anh)}" alt="${escapeHtml(customer.tenkh || 'Khách hàng DMS')}" class="map-popup-image" />`
+    : ''
+
+  return `<div class="map-popup-content">${metaRows}${image}</div>`
+}
+
 function App() {
   const [form, setForm] = useState(() => {
     const initial = createInitialForm()
@@ -291,9 +367,13 @@ function App() {
   const [nppAreasPrepared, setNppAreasPrepared] = useState([])
   const [detectedNpp, setDetectedNpp] = useState('')
   const [detectedKv, setDetectedKv] = useState('')
+  const [dmsCustomers, setDmsCustomers] = useState([])
+  const [loadingDmsCustomers, setLoadingDmsCustomers] = useState(false)
   const [locationData, setLocationData] = useState(null)
   const [photoFile, setPhotoFile] = useState(null)
   const [photoDataUrl, setPhotoDataUrl] = useState('')
+  const [hasConfirmedNoDms, setHasConfirmedNoDms] = useState(false)
+  const [showExpandedMap, setShowExpandedMap] = useState(false)
   const [loadingLocation, setLoadingLocation] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -303,16 +383,26 @@ function App() {
   const miniMapRef = useRef(null)
   const miniMapInstanceRef = useRef(null)
   const miniMapLayersRef = useRef([])
+  const miniMapClusterRef = useRef(null)
+  const expandedMapRef = useRef(null)
+  const expandedMapInstanceRef = useRef(null)
+  const expandedMapLayersRef = useRef([])
 
   const locationBadge = useMemo(() => {
     if (!locationData) {
       return { label: 'Chưa xác thực vị trí', tone: 'neutral' }
     }
 
-    return locationData.trusted
-      ? { label: 'Vị trí tin cậy', tone: 'success' }
-      : { label: 'Vị trí chưa đạt chuẩn', tone: 'danger' }
-  }, [locationData])
+    if (!locationData.trusted) {
+      return { label: 'Vị trí chưa đạt chuẩn', tone: 'danger' }
+    }
+
+    if (detectedNpp && detectedKv) {
+      return { label: 'Vị trí thành công', tone: 'success' }
+    }
+
+    return { label: 'Chưa tìm thấy NPP/Khu vực', tone: 'danger' }
+  }, [locationData, detectedNpp, detectedKv])
 
   useEffect(() => {
     let cancelled = false
@@ -382,6 +472,7 @@ function App() {
         miniMapInstanceRef.current = null
       }
       miniMapLayersRef.current = []
+      miniMapClusterRef.current = null
       return
     }
 
@@ -391,7 +482,7 @@ function App() {
 
     if (!miniMapInstanceRef.current) {
       const map = L.map(miniMapRef.current, {
-        zoomControl: true,
+        zoomControl: false,
         attributionControl: false,
       }).setView([locationData.lat, locationData.lng], 16)
 
@@ -408,7 +499,7 @@ function App() {
         opacity: 0.9,
         subdomains: 'abcd',
       }).addTo(map)
-
+    
       miniMapInstanceRef.current = map
     }
 
@@ -419,11 +510,18 @@ function App() {
       }
     })
     miniMapLayersRef.current = []
+    if (miniMapClusterRef.current) {
+      map.removeLayer(miniMapClusterRef.current)
+      miniMapClusterRef.current = null
+    }
 
     const currentPoint = [locationData.lng, locationData.lat]
     const currentLatLng = [locationData.lat, locationData.lng]
     const matchedFeature = findNppFeatureByPoint(currentPoint, nppAreasPrepared)
     const matchedNpp = matchedFeature?.properties?.npp || ''
+    const matchedKv = findKvByNpp(matchedNpp)
+    setDetectedNpp(matchedNpp)
+    setDetectedKv(matchedKv)
 
     const markerLayer = L.circleMarker(currentLatLng, {
       radius: 6,
@@ -460,8 +558,129 @@ function App() {
       map.setView(currentLatLng, 16)
     }
 
+    const clusterGroup = L.markerClusterGroup({
+      maxClusterRadius: 80,
+      spiderfyOnMaxZoom: true,
+      showCoverageOnHover: false,
+      zoomToBoundsOnClick: true,
+      disableClusteringAtZoom: 17,
+      iconCreateFunction(cluster) {
+        const count = cluster.getChildCount()
+        return L.divIcon({
+          html: `<span>${count}</span>`,
+          className: 'custom-cluster-icon',
+          iconSize: L.point(36, 36),
+        })
+      },
+    })
+
+    dmsCustomers.forEach((customer) => {
+      const marker = L.marker([customer.vi_do_num, customer.kinh_do_num], {
+        icon: L.divIcon({
+          className: 'custom-dms-dot',
+          iconSize: [12, 12],
+        }),
+      }).bindPopup(createDmsPopupContent(customer), { maxWidth: 260, className: 'dms-popup' })
+
+      clusterGroup.addLayer(marker)
+    })
+
+    clusterGroup.addTo(map)
+    miniMapClusterRef.current = clusterGroup
+
     map.invalidateSize()
-  }, [locationData, nppAreasPrepared])
+  }, [locationData, nppAreasPrepared, dmsCustomers])
+
+  useEffect(() => {
+    if (!showExpandedMap || !locationData || !expandedMapRef.current) {
+      if (expandedMapInstanceRef.current) {
+        expandedMapInstanceRef.current.remove()
+        expandedMapInstanceRef.current = null
+      }
+      expandedMapLayersRef.current = []
+      return
+    }
+
+    if (!expandedMapInstanceRef.current) {
+      const map = L.map(expandedMapRef.current, {
+        zoomControl: false,
+        attributionControl: false,
+      }).setView([locationData.lat, locationData.lng], 15)
+
+      L.tileLayer('http://www.google.cn/maps/vt?lyrs=s@189&gl=cn&x={x}&y={y}&z={z}', {
+        attribution: '',
+        maxZoom: 22,
+        minZoom: 5,
+      }).addTo(map)
+
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png', {
+        attribution: '',
+        maxZoom: 22,
+        minZoom: 5,
+        opacity: 0.9,
+        subdomains: 'abcd',
+      }).addTo(map)
+
+      expandedMapInstanceRef.current = map
+    }
+
+    const map = expandedMapInstanceRef.current
+    expandedMapLayersRef.current.forEach((layer) => {
+      if (map.hasLayer(layer)) {
+        map.removeLayer(layer)
+      }
+    })
+    expandedMapLayersRef.current = []
+
+    const matchedFeature = findNppFeatureByPoint([locationData.lng, locationData.lat], nppAreasPrepared)
+    if (matchedFeature) {
+      const featureLayer = L.geoJSON(matchedFeature, {
+        style: {
+          color: '#2563eb',
+          weight: 2,
+          fillColor: '#60a5fa',
+          fillOpacity: 0.2,
+        },
+      }).addTo(map)
+      expandedMapLayersRef.current.push(featureLayer)
+      map.fitBounds(featureLayer.getBounds(), { padding: [24, 24], maxZoom: 16 })
+    } else {
+      map.setView([locationData.lat, locationData.lng], 15)
+    }
+
+    const currentMarker = L.circleMarker([locationData.lat, locationData.lng], {
+      radius: 7,
+      color: '#1d4ed8',
+      fillColor: '#3b82f6',
+      fillOpacity: 1,
+      weight: 2,
+    })
+      .bindTooltip('Vị trí của tôi', { direction: 'top' })
+      .addTo(map)
+    expandedMapLayersRef.current.push(currentMarker)
+
+    dmsCustomers.forEach((customer) => {
+      const marker = L.circleMarker([customer.vi_do_num, customer.kinh_do_num], {
+        radius: 6,
+        color: '#dc2626',
+        fillColor: '#ef4444',
+        fillOpacity: 0.95,
+        weight: 2,
+      })
+        .bindPopup(createDmsPopupContent(customer), { maxWidth: 280, className: 'dms-popup' })
+        .addTo(map)
+      expandedMapLayersRef.current.push(marker)
+    })
+
+    map.invalidateSize()
+  }, [showExpandedMap, locationData, nppAreasPrepared, dmsCustomers])
+
+  function handleFocusMyMapPoint() {
+    if (!expandedMapInstanceRef.current || !locationData) {
+      return
+    }
+    expandedMapInstanceRef.current.setView([locationData.lat, locationData.lng], 18)
+  }
 
   useEffect(() => {
     return () => {
@@ -469,8 +688,44 @@ function App() {
         miniMapInstanceRef.current.remove()
         miniMapInstanceRef.current = null
       }
+      if (expandedMapInstanceRef.current) {
+        expandedMapInstanceRef.current.remove()
+        expandedMapInstanceRef.current = null
+      }
     }
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadDmsCustomers() {
+      if (!detectedNpp) {
+        setDmsCustomers([])
+        return
+      }
+
+      setLoadingDmsCustomers(true)
+      try {
+        const list = await fetchDmsCustomersByNpp(detectedNpp)
+        if (!cancelled) {
+          setDmsCustomers(list)
+        }
+      } catch {
+        if (!cancelled) {
+          setDmsCustomers([])
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingDmsCustomers(false)
+        }
+      }
+    }
+
+    loadDmsCustomers()
+    return () => {
+      cancelled = true
+    }
+  }, [detectedNpp])
 
   function handleLoginSubmit(event) {
     event.preventDefault()
@@ -508,6 +763,16 @@ function App() {
         }
       }
 
+      if (key === 'npp') {
+        const nextNpp = value || ''
+        const mappedKv = findKvByNpp(nextNpp)
+        return {
+          ...prev,
+          npp: nextNpp,
+          kv: mappedKv || prev.kv,
+        }
+      }
+
       return { ...prev, [key]: value }
     })
   }
@@ -529,6 +794,7 @@ function App() {
   async function handleGetLocation() {
     setError('')
     setLoadingLocation(true)
+    setHasConfirmedNoDms(false)
 
     try {
       if (miniMapInstanceRef.current) {
@@ -551,20 +817,6 @@ function App() {
       }
 
       const verified = await collectVerifiedLocation(3)
-      const matchedFeature = findNppFeatureByPoint([verified.lng, verified.lat], nppAreasPrepared)
-      const matchedNpp = matchedFeature?.properties?.npp || ''
-      const matchedKv = findKvByNpp(matchedNpp)
-
-      setDetectedNpp(matchedNpp)
-      setDetectedKv(matchedKv)
-      if (matchedNpp && matchedKv) {
-        setForm((prev) => ({
-          ...prev,
-          kv: matchedKv,
-          npp: matchedNpp,
-        }))
-      }
-
       setLocationData(verified)
 
       if (!verified.trusted) {
@@ -582,6 +834,24 @@ function App() {
     } finally {
       setLoadingLocation(false)
     }
+  }
+
+  function handleConfirmNoDms() {
+    if (!locationData?.trusted) {
+      setError('Vị trí chưa đạt chuẩn chống fake. Vui lòng lấy lại vị trí.')
+      return
+    }
+    if (!detectedNpp || !detectedKv) {
+      setError('Chỉ xác nhận khi đã tìm thấy NPP theo GPS và khu vực.')
+      return
+    }
+    setForm((prev) => ({
+      ...prev,
+      kv: detectedKv,
+      npp: detectedNpp,
+    }))
+    setError('')
+    setHasConfirmedNoDms(true)
   }
 
   function handleOpenCamera() {
@@ -629,6 +899,9 @@ function App() {
     setLocationData(null)
     setDetectedNpp('')
     setDetectedKv('')
+    setDmsCustomers([])
+    setHasConfirmedNoDms(false)
+    setShowExpandedMap(false)
     setPhotoFile(null)
     setPhotoDataUrl('')
     setError('')
@@ -740,19 +1013,78 @@ function App() {
         <form className="panel form-panel" onSubmit={handleSubmit}>
           <h2>Thông tin khách hàng</h2>
 
-          <label>
-            Tên khách hàng
-            <input
-              required
-              value={form.ten}
-              onChange={(event) => updateField('ten', event.target.value)}
-              placeholder="Nhập tên cửa hàng"
-              autoComplete="organization"
-              enterKeyHint="next"
-            />
-          </label>
+          <div className="card-block">
+            <div className="row-between">
+              <h3>Xác nhận chưa có khách hàng DMS</h3>
+              <span className={`status ${locationBadge.tone}`}>{locationBadge.label}</span>
+            </div>
+            <div className="row-buttons">
+              <button type="button" onClick={handleGetLocation} disabled={loadingLocation}>
+                {loadingLocation
+                  ? 'Đang lấy vị trí...'
+                  : locationData
+                    ? 'Lấy lại vị trí'
+                    : 'Lấy vị trí chuẩn'}
+              </button>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => setShowExpandedMap(true)}
+                disabled={!locationData}
+              >
+                Xem bản đồ lớn
+              </button>
+            </div>
+            {locationData && detectedNpp && detectedKv && (
+              <ul className="meta-list">
+                <li>Vĩ độ: {locationData.lat.toFixed(8)}</li>
+                <li>Kinh độ: {locationData.lng.toFixed(8)}</li>
+              </ul>
+            )}
 
-          <div className="grid-2">
+            {locationData ? (
+              <div className="location-map-card">
+                <p className="hint">
+                  Khu vực NPP theo GPS: <strong>{detectedNpp || 'Đang xác định'}</strong>
+                </p>
+                <p className="hint">
+                  Khu vực theo NPP: <strong>{detectedKv || 'Đang xác định'}</strong>
+                </p>
+                <p className="hint">
+                  Khách hàng DMS trong khu vực: <strong>{loadingDmsCustomers ? 'Đang tải...' : dmsCustomers.length}</strong>
+                </p>
+                <div ref={miniMapRef} className="mini-map-frame" />
+              </div>
+            ) : null}
+
+            <div className="row-buttons" style={{ marginTop: 10 }}>
+              <button
+                type="button"
+                onClick={handleConfirmNoDms}
+                disabled={!locationData?.trusted || !detectedNpp || !detectedKv}
+              >
+                {hasConfirmedNoDms ? 'Đã xác nhận chưa có khách hàng DMS' : 'Xác nhận chưa có khách hàng DMS'}
+              </button>
+            </div>
+          </div>
+
+          {!hasConfirmedNoDms ? (
+            <p className="hint">Hoàn tất bước xác nhận vị trí ở trên để mở phần nhập khách hàng.</p>
+          ) : (
+            <>
+              <label>
+                Tên khách hàng
+                <input
+                  required
+                  value={form.ten}
+                  onChange={(event) => updateField('ten', event.target.value)}
+                  placeholder="Nhập tên cửa hàng"
+                  autoComplete="organization"
+                  enterKeyHint="next"
+                />
+              </label>
+
+              <div className="grid-2">
             <label>
               Kênh
               <select value={form.kenh} onChange={(event) => updateField('kenh', event.target.value)}>
@@ -781,9 +1113,9 @@ function App() {
                 ))}
               </select>
             </label>
-          </div>
+              </div>
 
-          <div className="grid-2">
+              <div className="grid-2">
             <label>
               Khu vực
               <select value={form.kv} onChange={(event) => updateField('kv', event.target.value)}>
@@ -812,7 +1144,7 @@ function App() {
               </select>
             </label>
             
-          </div>
+              </div>
 <div className="card-block">
               <h3>Ngành hàng kinh doanh</h3>
               <p className="hint">Chọn các ngành hàng mà cửa hàng đang kinh doanh</p>
@@ -834,45 +1166,6 @@ function App() {
                 </div>
               )}
             </div>
-          <div className="card-block">
-            <div className="row-between">
-              <h3>Xác thực vị trí</h3>
-              <span className={`status ${locationBadge.tone}`}>{locationBadge.label}</span>
-            </div>
-            <button type="button" onClick={handleGetLocation} disabled={loadingLocation}>
-              {loadingLocation
-                ? 'Đang lấy vị trí...'
-                : locationData
-                  ? 'Lấy lại vị trí'
-                  : 'Lấy vị trí chuẩn'}
-            </button>
-            {locationData && (
-              <ul className="meta-list">
-                <li>Vĩ độ: {locationData.lat.toFixed(8)}</li>
-                <li>Kinh độ: {locationData.lng.toFixed(8)}</li>
-                {/* <li>Độ chính xác: {locationData.accuracy.toFixed(1)}m</li> */}
-                {/* <li>Độ lệch mẫu: {locationData.spread.toFixed(1)}m</li>
-                <li>Tốc độ bất thường max: {locationData.maxSpeedKmH.toFixed(1)} km/h</li>
-                <li>Múi giờ thiết bị: {locationData.timezone}</li>
-                <li>Điểm tin cậy: {locationData.trustScore}/100</li> */}
-              </ul>
-            )}
-    
-
-            {locationData ? (
-              <div className="location-map-card">
-                <p className="hint">
-                  Khu vực NPP theo GPS:{' '}
-                  <strong>{detectedNpp || 'Đang xác định'}</strong>
-                </p>
-                <p className="hint">
-                  Khu vực theo NPP: <strong>{detectedKv || 'Đang xác định'}</strong>
-                </p>
-                <div ref={miniMapRef} className="mini-map-frame" />
-              </div>
-            ) : null}
-          
-          </div>
 
           <div className="card-block">
             <h3>Ảnh thực tế</h3>
@@ -892,6 +1185,8 @@ function App() {
             />
             {photoDataUrl ? <img src={photoDataUrl} alt="Ảnh khách hàng" className="preview" /> : null}
           </div>
+            </>
+          )}
 
           {error ? <p className="error">{error}</p> : null}
 
@@ -1007,6 +1302,35 @@ function App() {
                 <p>Chưa có tọa độ GPS.</p>
               )}
             </div>
+          </section>
+        </div>
+      ) : null}
+
+      {showExpandedMap && locationData ? (
+        <div
+          className="modal-overlay"
+          role="presentation"
+          onClick={() => setShowExpandedMap(false)}
+        >
+          <section
+            className="modal-panel map-modal-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Bản đồ lớn"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="row-between modal-header">
+              <h3>Bản đồ lớn</h3>
+              <div className="row-buttons">
+                <button type="button" className="ghost close-btn" onClick={handleFocusMyMapPoint}>
+                  Chuyển tới vị trí của tôi
+                </button>
+                <button type="button" className="ghost close-btn" onClick={() => setShowExpandedMap(false)}>
+                  Đóng
+                </button>
+              </div>
+            </div>
+            <div ref={expandedMapRef} className="map-frame map-frame-expanded" />
           </section>
         </div>
       ) : null}
