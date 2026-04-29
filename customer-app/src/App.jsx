@@ -404,6 +404,22 @@ function App() {
     return { label: 'Chưa tìm thấy NPP/Khu vực', tone: 'danger' }
   }, [locationData, detectedNpp, detectedKv])
 
+  const visibleCustomers = useMemo(() => {
+    if (!currentUser) {
+      return []
+    }
+
+    const allowedCreators = new Set(
+      [currentUserCode, currentUser]
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+    )
+
+    return normalizeCustomers(customers).filter((customer) =>
+      allowedCreators.has(String(customer?.nguoi_tao || '').trim())
+    )
+  }, [customers, currentUser, currentUserCode])
+
   useEffect(() => {
     let cancelled = false
 
@@ -1203,14 +1219,14 @@ function App() {
         <aside className="panel list-panel">
           <div className="row-between">
             <h2>Danh sách khách hàng</h2>
-            <span className="count">{customers.length}</span>
+            <span className="count">{visibleCustomers.length}</span>
           </div>
 
-          {!customers.length ? (
+          {!visibleCustomers.length ? (
             <p className="empty">Chưa có dữ liệu. Tạo khách hàng đầu tiên để bắt đầu.</p>
           ) : (
             <div className="customer-list">
-              {normalizeCustomers(customers).map((customer) => (
+              {visibleCustomers.map((customer) => (
                 <article key={customer.id || `${customer.ten}-${customer.ngay_tao}`} className="customer-item">
                   <div className="row-between">
                     <strong>{customer.ten}</strong>
