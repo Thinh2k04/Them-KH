@@ -461,7 +461,7 @@ function App() {
 
     async function loadAreas() {
       try {
-        const response = await fetch('/areas.geojson', { cache: 'no-store' })
+        const response = await fetch(`${import.meta.env.BASE_URL}areas.geojson`, { cache: 'no-store' })
         if (!response.ok) {
           return
         }
