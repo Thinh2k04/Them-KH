@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "homepage": "https://thinh2k04.github.io/Them-KH/",
+  "homepage": "https://thinh2k04.github.io/Them-KH/ ",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
