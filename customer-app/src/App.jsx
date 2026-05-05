@@ -369,6 +369,7 @@ function App() {
   const [detectedKv, setDetectedKv] = useState('')
   const [dmsCustomers, setDmsCustomers] = useState([])
   const [loadingDmsCustomers, setLoadingDmsCustomers] = useState(false)
+  const [loadingCustomers, setLoadingCustomers] = useState(false)
   const [locationData, setLocationData] = useState(null)
   const [photoFile, setPhotoFile] = useState(null)
   const [photoDataUrl, setPhotoDataUrl] = useState('')
@@ -419,6 +420,26 @@ function App() {
       allowedCreators.has(String(customer?.nguoi_tao || '').trim())
     )
   }, [customers, currentUser, currentUserCode])
+
+  async function loadCustomers({ showError = true } = {}) {
+    setLoadingCustomers(true)
+
+    try {
+      const parsedCustomers = await fetchCustomers()
+      setCustomers(parsedCustomers)
+      if (showError) {
+        setError('')
+      }
+      return true
+    } catch {
+      if (showError) {
+        setError('Không thể tải lại danh sách khách hàng.')
+      }
+      return false
+    } finally {
+      setLoadingCustomers(false)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -979,9 +1000,11 @@ function App() {
       }
 
       await saveCustomer(payload)
-      const latestCustomers = await fetchCustomers()
-      setCustomers(latestCustomers)
+      const reloaded = await loadCustomers({ showError: false })
       resetForm()
+      if (!reloaded) {
+        setError('Đã lưu khách hàng, nhưng không thể tải lại danh sách.')
+      }
     } catch (err) {
       setError(err.message || 'Không thể lưu khách hàng.')
     } finally {
@@ -1219,7 +1242,17 @@ function App() {
         <aside className="panel list-panel">
           <div className="row-between">
             <h2>Danh sách khách hàng</h2>
-            <span className="count">{visibleCustomers.length}</span>
+            <div className="list-actions">
+              <button
+                type="button"
+                className="ghost refresh-btn"
+                onClick={loadCustomers}
+                disabled={loadingCustomers}
+              >
+                {loadingCustomers ? 'Đang tải...' : 'Tải lại'}
+              </button>
+              <span className="count">{visibleCustomers.length}</span>
+            </div>
           </div>
 
           {!visibleCustomers.length ? (
