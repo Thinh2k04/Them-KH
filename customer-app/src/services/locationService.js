@@ -1,5 +1,14 @@
 import { computeSpeedKmH, distanceInMeters } from '../utils/geo'
 
+function normalizeGeoError(err) {
+  if (!err) return new Error('Không thể lấy vị trí.')
+  const code = err.code
+  if (code === 1) return new Error('Quyền vị trí đang bị từ chối. Vui lòng cấp quyền để tiếp tục.')
+  if (code === 2) return new Error('Không thể xác định vị trí. Vui lòng bật GPS và thử lại.')
+  if (code === 3) return new Error('Lấy vị trí bị quá thời gian. Vui lòng thử lại.')
+  return new Error(err.message || 'Không thể lấy vị trí.')
+}
+
 function getNetworkInfo() {
   const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection
 
@@ -55,37 +64,104 @@ function buildSecurityChecks(summary) {
   }
 }
 
-function getCurrentPositionStrict() {
+function getCurrentPositionStrict({ timeout = 15000, maximumAge = 0 } = {}) {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
       reject(new Error('Trình duyệt không hỗ trợ định vị GPS.'))
       return
     }
 
-    navigator.geolocation.getCurrentPosition(resolve, reject, {
+    navigator.geolocation.getCurrentPosition(resolve, (err) => reject(normalizeGeoError(err)), {
       enableHighAccuracy: true,
-      timeout: 15000,
-      maximumAge: 0,
+      timeout,
+      maximumAge,
     })
   })
 }
 
 export async function collectVerifiedLocation(sampleCount = 3) {
-  const samples = []
-
-  for (let i = 0; i < sampleCount; i += 1) {
-    const pos = await getCurrentPositionStrict()
-    samples.push({
-      lat: pos.coords.latitude,
-      lng: pos.coords.longitude,
-      accuracy: pos.coords.accuracy,
-      timestamp: pos.timestamp,
-    })
+  if (!navigator.geolocation) {
+    throw new Error('Trình duyệt không hỗ trợ định vị GPS.')
   }
 
-  const avgLat = samples.reduce((sum, item) => sum + item.lat, 0) / sampleCount
-  const avgLng = samples.reduce((sum, item) => sum + item.lng, 0) / sampleCount
-  const avgAccuracy = samples.reduce((sum, item) => sum + item.accuracy, 0) / sampleCount
+  const samples = await new Promise((resolve, reject) => {
+    const collected = []
+    let settled = false
+    let watchId = null
+
+    const finish = (value, isError) => {
+      if (settled) return
+      settled = true
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId)
+      }
+      if (isError) reject(value)
+      else resolve(value)
+    }
+
+    const overallTimeoutMs = Math.max(6000, Math.min(20000, sampleCount * 6500))
+    const timer = window.setTimeout(() => {
+      // If we got at least 1 sample, use it instead of failing hard.
+      if (collected.length > 0) {
+        finish(collected, false)
+        return
+      }
+      finish(new Error('Lấy vị trí bị quá thời gian. Vui lòng thử lại.'), true)
+    }, overallTimeoutMs)
+
+    const pushSample = (pos) => {
+      const next = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        accuracy: pos.coords.accuracy,
+        timestamp: pos.timestamp,
+      }
+
+      // De-dup very similar consecutive updates.
+      const last = collected[collected.length - 1]
+      if (
+        last &&
+        Math.abs(last.lat - next.lat) < 0.0000001 &&
+        Math.abs(last.lng - next.lng) < 0.0000001 &&
+        Math.abs(last.accuracy - next.accuracy) < 0.5
+      ) {
+        return
+      }
+
+      collected.push(next)
+      if (collected.length >= sampleCount) {
+        window.clearTimeout(timer)
+        finish(collected, false)
+      }
+    }
+
+    // Warm start: allow a small cache window to get an instant fix, then watch refines accuracy.
+    watchId = navigator.geolocation.watchPosition(
+      (pos) => pushSample(pos),
+      (err) => {
+        window.clearTimeout(timer)
+        // Fallback to getCurrentPosition for browsers where watchPosition is flaky.
+        getCurrentPositionStrict({ timeout: 12000, maximumAge: 5000 })
+          .then((pos) => finish([{
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            accuracy: pos.coords.accuracy,
+            timestamp: pos.timestamp,
+          }], false))
+          .catch((fallbackErr) => finish(normalizeGeoError(fallbackErr), true))
+          .finally(() => {})
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 5000,
+      }
+    )
+  })
+
+  const denom = Math.max(1, samples.length)
+  const avgLat = samples.reduce((sum, item) => sum + item.lat, 0) / denom
+  const avgLng = samples.reduce((sum, item) => sum + item.lng, 0) / denom
+  const avgAccuracy = samples.reduce((sum, item) => sum + item.accuracy, 0) / denom
   const minAccuracy = Math.min(...samples.map((x) => x.accuracy))
   const maxAccuracy = Math.max(...samples.map((x) => x.accuracy))
   const accuracySpread = maxAccuracy - minAccuracy
