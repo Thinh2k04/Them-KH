@@ -150,6 +150,16 @@
   padding: 18px;
 }
 
+.browser-gate {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+}
+
+.browser-gate-panel {
+  width: min(760px, 100%);
+}
+
 .login-form {
   display: flex;
   flex-direction: column;

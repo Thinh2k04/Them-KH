@@ -23,6 +23,21 @@ const CUSTOMER_API_URL = 'https://jsk9x6z4-3000.asse.devtunnels.ms/api/khachhang
 const API_ORIGIN = new URL(CUSTOMER_API_URL).origin
 const DMS_CUSTOMER_API_URL = 'https://jsk9x6z4-3000.asse.devtunnels.ms/api/khachhang/dms'
 
+function getInAppBrowserName(userAgent) {
+  const ua = String(userAgent || '').toLowerCase()
+
+  // Common in-app browsers / webviews
+  if (ua.includes('zalo')) return 'Zalo'
+  if (ua.includes('messenger')) return 'Messenger'
+  if (ua.includes('instagram')) return 'Instagram'
+  if (ua.includes('fbav') || ua.includes('fban')) return 'Facebook'
+  if (ua.includes('line')) return 'LINE'
+  if (ua.includes('snapchat')) return 'Snapchat'
+  if (ua.includes('wv') || ua.includes('webview')) return 'In-app browser'
+
+  return ''
+}
+
 function normalizeNganhHang(value) {
   if (Array.isArray(value)) {
     return value
@@ -381,6 +396,7 @@ function App() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [loginError, setLoginError] = useState('')
+  const [blockedBrowserName, setBlockedBrowserName] = useState('')
 
   const fileInputRef = useRef(null)
   const miniMapRef = useRef(null)
@@ -478,6 +494,10 @@ function App() {
     window.addEventListener('keydown', handleEsc)
     return () => window.removeEventListener('keydown', handleEsc)
   }, [selectedCustomer])
+
+  useEffect(() => {
+    setBlockedBrowserName(getInAppBrowserName(navigator.userAgent))
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -1025,6 +1045,49 @@ function App() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  if (blockedBrowserName) {
+    return (
+      <main className="page browser-gate">
+        <section className="panel browser-gate-panel" role="dialog" aria-modal="true" aria-label="Yêu cầu mở bằng trình duyệt">
+          <h2>Mở bằng Safari/Chrome</h2>
+          <p className="hint">
+            Bạn đang mở bằng <strong>{blockedBrowserName}</strong>. Vui lòng mở link bằng <strong>Safari</strong>{' '}
+            (iPhone) hoặc <strong>Chrome</strong> (Android/PC) để tiếp tục sử dụng.
+          </p>
+          <div className="row-buttons">
+            <button
+              type="button"
+              className="ghost"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(window.location.href)
+                  alert('Đã copy link. Hãy dán vào Safari/Chrome để mở.')
+                } catch {
+                  prompt('Copy link này và mở bằng Safari/Chrome:', window.location.href)
+                }
+              }}
+            >
+              Copy link để mở bằng Safari/Chrome
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                // Best-effort: some apps will offer "Open in browser" after opening a new tab
+                window.open(window.location.href, '_blank', 'noopener,noreferrer')
+              }}
+            >
+              Thử mở tab mới
+            </button>
+          </div>
+          <ul className="meta-list">
+            <li>iPhone: bấm nút chia sẻ (Share) → “Open in Safari”.</li>
+            <li>Android: menu (⋮) → “Open in Chrome/Browser”.</li>
+          </ul>
+        </section>
+      </main>
+    )
   }
 
   if (!currentUser) {
