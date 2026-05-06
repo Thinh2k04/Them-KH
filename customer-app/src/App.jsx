@@ -993,8 +993,11 @@ function App() {
 
       const payload = {
         ten: form.ten.trim(),
+        kenh: selectedKenh,
         loai: form.loai,
+        kv: selectedKv,
         npp: form.npp.trim(),
+        nganh_hang: selectedNganhHang,
         nguoi_tao: currentUserCode || currentUser,
         anh: uploadedPath,
         vi_do: Number(locationData.lat.toFixed(8)),
