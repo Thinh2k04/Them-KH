@@ -15,18 +15,20 @@ export const nppByKV = {
   ],
   KV2: [
     'NPP Duy Anh',
-    'NPP Hoa Việt',
+    
     'NPP Hùng Huệ',
     'NPP Long Châm',
     'NPP Ngọc Kiên',
     'NPP Ngọc Thêu',
     'NPP Phong Hiền',
-    'NPP Phúc Thịnh',
+    
     'NPP Phương Đông',
     'NPP Thành Lụa',
     'NPP Tuấn Huyền',
   ],
   KV3: [
+    'NPP Hoa Việt',
+    'NPP Phúc Thịnh',
     'NPP Bảo Cường',
     'NPP Hikoji',
     'NPP Long Hải',
@@ -37,6 +39,7 @@ export const nppByKV = {
     'NPP Tiến Thịnh',
   ],
   KV4: [
+    'NPP Tùng Phương',
     'NPP Ánh Thu',
     'NPP Đức Oanh',
     'NPP Dương Minh',
@@ -47,7 +50,7 @@ export const nppByKV = {
     'NPP Tân Thúy',
     'NPP Thăng Hương',
     'NPP Thảo Thắng',
-    'NPP Tùng Phương',
+    
   ],
   KV5: [
     'NPP Đồng Lợi',
@@ -90,8 +93,12 @@ export const channelTypeMap = {
   'Kênh công nghiệp': ['Kênh công nghiệp'],
 }
 export const nganh_hang_options = [
-  'bim quẩy','chân gà',
-  'Hàng ướt', 'Sốt ', 'Thạnh', 'Sữa chua',
+  'bim quẩy',
+  'chân gà',
+  'Hàng ướt',
+  'Sốt',
+  'Thạnh',
+  'Sữa chua',
 ]
 
 export const KV_OPTIONS = Object.keys(nppByKV)
@@ -114,4 +121,5 @@ export const ADMIN_CODE_MAP = {
   ADHA: 'Nguyễn Đình Hà',
   ADDUC: 'Nguyễn Anh Đức',
   ADHUNG: 'Nguyễn Mạnh Hùng',
+  ADTEST: 'Admin Test',
 }

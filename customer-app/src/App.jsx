@@ -40,6 +40,8 @@ function normalizeNganhHang(value) {
   return []
 }
 
+const normalizedNganhHangOptions = nganh_hang_options.map((item) => String(item || '').trim()).filter(Boolean)
+
 function normalizeCustomers(rawValue) {
   const toNormalizedArray = (list) =>
     list.map((customer) => ({
@@ -962,7 +964,7 @@ function App() {
       const validNpp = (nppByKV[selectedKv] || []).includes(selectedNpp)
       const validNganhHang =
         selectedNganhHang.length > 0 &&
-        selectedNganhHang.every((item) => nganh_hang_options.includes(item))
+        selectedNganhHang.every((item) => normalizedNganhHangOptions.includes(item))
 
       if (!validKenh || !validLoai || !validKv || !validNpp) {
         throw new Error('Vui lòng chọn đầy đủ Kênh, Loại, Khu vực và NPP trước khi lưu.')
