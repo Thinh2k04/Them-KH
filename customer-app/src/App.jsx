@@ -1006,7 +1006,8 @@ function App() {
         loai: form.loai,
         kv: selectedKv,
         npp: form.npp.trim(),
-        nganh_hang: selectedNganhHang,
+        // send nganh_hang as a comma-separated string to match API expectation
+        nganh_hang: Array.isArray(selectedNganhHang) ? selectedNganhHang.join(',') : String(selectedNganhHang || ''),
         nguoi_tao: currentUserCode || currentUser,
         anh: uploadedPath,
         vi_do: Number(locationData.lat.toFixed(8)),
