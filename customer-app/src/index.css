@@ -1,21 +1,25 @@
 :root {
-  --text: #1d2a30;
-  --muted: #53646d;
-  --bg: #e9f2f3;
-  --surface: #f8fcfd;
-  --panel: #ffffffcc;
-  --border: #c8d7dc;
-  --focus: #0f766e;
-  --button-bg: #0f766e;
-  --button-border: #0f766e;
-  --button-text: #f5fffd;
-  --shadow-soft: rgba(18, 49, 63, 0.12) 0 10px 25px -14px;
+  --text: #4a1f18;
+  --muted: #8a5d4c;
+  --bg: #fff3ea;
+  --surface: rgba(255, 251, 247, 0.96);
+  --panel: rgba(255, 251, 247, 0.84);
+  --border: rgba(196, 136, 114, 0.34);
+  --focus: #d33f2c;
+  --button-bg: linear-gradient(135deg, #e64c3c 0%, #c82333 100%);
+  --button-border: #be2d30;
+  --button-text: #ffffff;
+  --shadow-soft: rgba(166, 45, 33, 0.16) 0 14px 28px -18px;
 
-  font-family: 'Segoe UI', 'Noto Sans', sans-serif;
+  font-family: 'Trebuchet MS', 'Verdana', sans-serif;
   font-size: 16px;
   line-height: 1.5;
   color: var(--text);
-  background: radial-gradient(circle at 10% 10%, #ffffff 0%, #e3eff1 35%, #dbe9ec 100%);
+  background:
+    radial-gradient(circle at 12% 8%, rgba(255, 194, 143, 0.62) 0 12%, transparent 13%),
+    radial-gradient(circle at 88% 12%, rgba(255, 255, 255, 0.56) 0 10%, transparent 11%),
+    radial-gradient(circle at 20% 85%, rgba(234, 83, 46, 0.14) 0 18%, transparent 19%),
+    linear-gradient(180deg, #fff6ef 0%, #ffe9db 100%);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -35,6 +39,18 @@ h1,
 h2,
 h3 {
   margin: 0;
+  font-family: Georgia, 'Times New Roman', serif;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, transparent 40%),
+    radial-gradient(circle at top center, rgba(255, 255, 255, 0.58), transparent 35%);
+  opacity: 0.85;
 }
 
 h1 {

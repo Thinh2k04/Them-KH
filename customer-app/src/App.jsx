@@ -323,10 +323,10 @@ function escapeHtml(value) {
 
 function createDmsPopupContent(customer) {
   const fields = [
-    ['Mã KH', customer?.makh],
-    ['Tên KH', customer?.tenkh],
+    ['Mã quán', customer?.makh],
+    ['Tên quán', customer?.tenkh],
     ['Trạng thái', customer?.trang_thai_kh],
-    ['Loại KH', customer?.loai_kh],
+    ['Loại quán', customer?.loai_kh],
     ['Kênh', customer?.kenh],
     ['Địa chỉ', customer?.dia_chi],
     ['ĐC giao hàng', customer?.dc_giao_hangnh],
@@ -341,7 +341,7 @@ function createDmsPopupContent(customer) {
     .join('')
 
   const image = customer?.hinh_anh
-    ? `<img src="${escapeHtml(customer.hinh_anh)}" alt="${escapeHtml(customer.tenkh || 'Khách hàng DMS')}" class="map-popup-image" />`
+    ? `<img src="${escapeHtml(customer.hinh_anh)}" alt="${escapeHtml(customer.tenkh || 'Quán ăn DMS')}" class="map-popup-image" />`
     : ''
 
   return `<div class="map-popup-content">${metaRows}${image}</div>`
@@ -433,7 +433,7 @@ function App() {
       return true
     } catch {
       if (showError) {
-        setError('Không thể tải lại danh sách khách hàng.')
+        setError('Không thể tải lại danh sách quán ăn.')
       }
       return false
     } finally {
@@ -973,15 +973,15 @@ function App() {
       }
 
       if (!form.ten.trim() || !form.npp.trim()) {
-        throw new Error('Vui lòng nhập đầy đủ tên khách hàng và nhà phân phối.')
+        throw new Error('Vui lòng nhập đầy đủ tên quán ăn và nhà phân phối.')
       }
 
       if (!locationData?.trusted) {
-        throw new Error('Bạn cần lấy vị trí đạt chuẩn trước khi lưu khách hàng.')
+        throw new Error('Bạn cần lấy vị trí đạt chuẩn trước khi lưu quán ăn.')
       }
 
       if (!photoDataUrl) {
-        throw new Error('Bạn cần chụp ảnh cửa hàng trước khi lưu khách hàng.')
+        throw new Error('Bạn cần chụp ảnh quán ăn trước khi lưu quán ăn.')
       }
       if (!photoFile) {
         throw new Error('Thiếu file ảnh gốc để upload. Vui lòng chụp lại.')
@@ -1039,11 +1039,20 @@ function App() {
   return (
     <main className="page">
       <header className="page-header">
-        <div>
-          <p className="eyebrow">Field Sales</p>
-          <h1>Thêm khách hàng mới</h1>
-          <p className="subtitle">Lấy vị trí GPS chuẩn, chụp ảnh thực tế, và lưu theo mẫu dữ liệu của bạn.</p>
-          <p className="subtitle">Đăng nhập: <strong>{currentUser}</strong>{currentUserCode ? ` (${currentUserCode})` : ''}</p>
+        <div className="brand-ticker" aria-hidden="true">
+          <div className="brand-ticker-track">
+            <span>Ăn Cùng Bà Tuyết • Thêm khách hàng mới • Lấy vị trí chuẩn • Chụp ảnh thực tế  </span>
+            <span>Ăn Cùng Bà Tuyết • Thêm khách hàng mới • Lấy vị trí chuẩn • Chụp ảnh thực tế  </span>
+          </div>
+        </div>
+        <div className="header-content">
+          <img src="https://res.cloudinary.com/dvg7ourbo/image/upload/v1766046738/logo22px_re6vqu.png" alt="Thêm khách hàng mới" className="logo" />
+          <div>
+            <p className="eyebrow">Thêm khách hàng mới</p>
+            <h1>Hệ thống thêm khách hàng mới</h1>
+            <p className="subtitle">Lấy vị trí GPS, chụp ảnh thực tế, và lưu thông tin khách hàng của bạn.</p>
+            <p className="subtitle">Đăng nhập: <strong>{currentUser}</strong>{currentUserCode ? ` (${currentUserCode})` : ''}</p>
+          </div>
         </div>
         {/* <button type="button" className="ghost" onClick={handleLogout}>Đăng xuất</button> */}
       </header>
@@ -1054,7 +1063,7 @@ function App() {
 
           <div className="card-block">
             <div className="row-between">
-              <h3>Xác nhận chưa có khách hàng DMS</h3>
+              <h3>Xác nhận khách hàng chưa có trong DMS</h3>
               <span className={`status ${locationBadge.tone}`}>{locationBadge.label}</span>
             </div>
             <div className="row-buttons">
@@ -1102,7 +1111,7 @@ function App() {
                 onClick={handleConfirmNoDms}
                 disabled={!locationData?.trusted || !detectedNpp || !detectedKv}
               >
-                {hasConfirmedNoDms ? 'Đã xác nhận chưa có khách hàng DMS' : 'Xác nhận chưa có khách hàng DMS'}
+                {hasConfirmedNoDms ? 'Đã xác nhận khách hàng chưa có trong DMS' : 'Xác nhận khách hàng chưa có trong DMS'}
               </button>
             </div>
           </div>
@@ -1117,7 +1126,7 @@ function App() {
                   required
                   value={form.ten}
                   onChange={(event) => updateField('ten', event.target.value)}
-                  placeholder="Nhập tên cửa hàng"
+                  placeholder="Nhập tên khách hàng"
                   autoComplete="organization"
                   enterKeyHint="next"
                 />
@@ -1186,7 +1195,7 @@ function App() {
               </div>
 <div className="card-block">
               <h3>Ngành hàng kinh doanh</h3>
-              <p className="hint">Chọn các ngành hàng mà cửa hàng đang kinh doanh</p>
+              <p className="hint">Chọn các ngành hàng mà khách hàng đang kinh doanh</p>
               <div className="checkbox-group">
                 {nganh_hang_options.map((option) => (
                   <label key={option} className="checkbox-label">
