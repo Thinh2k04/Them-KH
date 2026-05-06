@@ -85,16 +85,16 @@ export const nppByKV = {
 }
 
 export const channelTypeMap = {
-  'Kênh siêu thị': ['Đại siêu thị', 'Siêu Thị Lớn', 'siêu thị vừa và nhỏ'],
-  'Kênh sỉ': ['Khách sỉ lớn', 'khách sỉ vừa và nhỏ'],
+  'Kênh siêu thị': ['Đại siêu thị', 'Siêu Thị Lớn', 'Siêu thị vừa và nhỏ'],
+  'Kênh sỉ': ['Khách sỉ lớn', 'Khách sỉ vừa và nhỏ'],
   'Kênh trường học': ['Khách trường học'],
   'Kênh tiêu thụ trực tiếp': ['Cửa hàng tạp hóa', 'Khách lẻ tiêu thụ trực tiếp'],
-  'Kênh horeca': ['kênh horeca'],
+  'Kênh horeca': ['Kênh horeca'],
   'Kênh công nghiệp': ['Kênh công nghiệp'],
 }
 export const nganh_hang_options = [
-  'bim quẩy',
-  'chân gà',
+  'Bim quẩy',
+  'Chân gà',
   'Hàng ướt',
   'Sốt',
   'Thạnh',
