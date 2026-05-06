@@ -783,6 +783,7 @@ function App() {
   }
 
   function updateField(key, value) {
+    setError('')
     setForm((prev) => {
       if (key === 'kenh') {
         const nextKenh = value || ''
@@ -817,11 +818,19 @@ function App() {
   }
 
   function handleNganhHangChange(option) {
+    const normalizedOption = String(option || '').trim()
+
+    if (!normalizedOption) {
+      return
+    }
+
+    setError('')
     setForm((prev) => {
-      const hasOption = prev.nganh_hang.includes(option)
+      const currentNganhHang = normalizeNganhHang(prev.nganh_hang)
+      const hasOption = currentNganhHang.includes(normalizedOption)
       const nextNganhHang = hasOption
-        ? prev.nganh_hang.filter((item) => item !== option)
-        : [...prev.nganh_hang, option]
+        ? currentNganhHang.filter((item) => item !== normalizedOption)
+        : [...currentNganhHang, normalizedOption]
 
       return {
         ...prev,
@@ -1206,7 +1215,7 @@ function App() {
                   <label key={option} className="checkbox-label">
                     <input
                       type="checkbox"
-                      checked={form.nganh_hang.includes(option)}
+                      checked={normalizeNganhHang(form.nganh_hang).includes(String(option || '').trim())}
                       onChange={() => handleNganhHangChange(option)}
                     />
                     <span>{option}</span>
