@@ -1336,6 +1336,13 @@ function App() {
               <p><strong>Tên KH:</strong> {selectedCustomer.ten || '—'}</p>
               <p><strong>Loại:</strong> {selectedCustomer.loai || '—'}</p>
               <p><strong>NPP:</strong> {selectedCustomer.npp || '—'}</p>
+              <p>
+                <strong>Ngành hàng:</strong>{' '}
+                {(() => {
+                  const nh = normalizeNganhHang(selectedCustomer.nganh_hang)
+                  return nh.length > 0 ? nh.join(', ') : '—'
+                })()}
+              </p>
               <p><strong>Nhân viên tạo:</strong> {selectedCustomer.nguoi_tao || '—'}</p>
               <p>
                 <strong>Tọa độ:</strong>{' '}
