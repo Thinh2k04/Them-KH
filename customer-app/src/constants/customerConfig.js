@@ -105,7 +105,7 @@ export const KV_OPTIONS = Object.keys(nppByKV)
 export const CHANNEL_OPTIONS = Object.keys(channelTypeMap)
 export const NPP_OPTIONS = Object.values(nppByKV).flat()
 export const CHECK_LABELS = {
-  accuracyOk: 'Độ chính xác GPS sai (nghi ngờ fake)',
+  accuracyOk: 'GPS sai (nghi ngờ fake)',
   spreadOk: 'Các mẫu GPS ổn định',
   freshOk: 'Dữ liệu GPS mới',
   speedOk: 'Không có tốc độ di chuyển bất thường',
