@@ -35,7 +35,7 @@ function buildSecurityChecks(summary) {
   const networkInfo = getNetworkInfo()
 
   const checks = {
-    accuracyOk: summary.avgAccuracy >= 3 && summary.avgAccuracy <= 25,
+    accuracyOk: summary.avgAccuracy >= 1.5 && summary.avgAccuracy <= 100,
     spreadOk: summary.maxSpread <= 18,
     freshOk: summary.ageMs <= 10000,
     speedOk: summary.maxSpeedKmH <= 120,
