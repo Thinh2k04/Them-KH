@@ -7,6 +7,8 @@ import {
   CHANNEL_OPTIONS,
   CHECK_LABELS,
   KV_OPTIONS,
+  PRODUCT_GROUPS,
+  PRODUCT_FIELD_LABELS,
   channelTypeMap,
   nppByKV,
   nganh_hang_options,
@@ -22,6 +24,7 @@ import './App.css'
 const CUSTOMER_API_URL = 'https://jsk9x6z4-3000.asse.devtunnels.ms/api/khachhang/'
 const API_ORIGIN = new URL(CUSTOMER_API_URL).origin
 const DMS_CUSTOMER_API_URL = 'https://jsk9x6z4-3000.asse.devtunnels.ms/api/khachhang/dms'
+const STORE_API_URL = 'https://jsk9x6z4-3000.asse.devtunnels.ms/api/cuahang'
 
 function getInAppBrowserName(userAgent) {
   const ua = String(userAgent || '').toLowerCase()
@@ -55,6 +58,11 @@ function normalizeNganhHang(value) {
   return []
 }
 
+function toFiniteNumber(value) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 const normalizedNganhHangOptions = nganh_hang_options.map((item) => String(item || '').trim()).filter(Boolean)
 
 function normalizeCustomers(rawValue) {
@@ -63,11 +71,35 @@ function normalizeCustomers(rawValue) {
       ...customer,
       id: Number(customer?.id),
       anh: customer?.anh || customer?.anh_base64 || '',
-      vi_do:
-        customer?.vi_do === null || customer?.vi_do === undefined ? null : Number(customer.vi_do),
-      kinh_do:
-        customer?.kinh_do === null || customer?.kinh_do === undefined ? null : Number(customer.kinh_do),
+      vi_do: toFiniteNumber(customer?.vi_do),
+      kinh_do: toFiniteNumber(customer?.kinh_do),
       ngay_tao: customer?.ngay_tao || '',
+    }))
+
+  if (Array.isArray(rawValue)) {
+    return toNormalizedArray(rawValue)
+  }
+
+  if (rawValue && typeof rawValue === 'object' && Array.isArray(rawValue.data)) {
+    return toNormalizedArray(rawValue.data)
+  }
+
+  return []
+}
+
+function normalizeStores(rawValue) {
+  const toNormalizedArray = (list) =>
+    list.map((store, index) => ({
+      ...store,
+      id: store?.id ?? index,
+      TenCH: store?.TenCH || store?.ten || store?.ten_ch || '',
+      DiaChi: store?.DiaChi || store?.dia_chi || '',
+      Phuong: store?.Phuong || store?.phuong || '',
+      Tinh: store?.Tinh || store?.tinh || '',
+      NPP: store?.NPP || store?.npp || '',
+      CoTrenDMS: Boolean(store?.CoTrenDMS ?? store?.co_tren_dms),
+      HinhAnh: store?.HinhAnh || store?.hinh_anh || '',
+      GhiChu: store?.GhiChu || store?.ghi_chu || '',
     }))
 
   if (Array.isArray(rawValue)) {
@@ -97,6 +129,22 @@ async function fetchCustomers() {
   return normalizeCustomers(parsed)
 }
 
+async function fetchStores() {
+  const response = await fetch(STORE_API_URL, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    throw new Error('Không thể tải danh sách cửa hàng từ API.')
+  }
+
+  const parsed = await response.json()
+  return normalizeStores(parsed)
+}
+
 async function saveCustomer(customerPayload) {
   const response = await fetch(CUSTOMER_API_URL, {
     method: 'POST',
@@ -111,6 +159,23 @@ async function saveCustomer(customerPayload) {
   if (!response.ok) {
     const parsed = await response.json().catch(() => null)
     throw new Error(parsed?.message || 'Không thể lưu khách hàng lên API.')
+  }
+}
+
+async function saveStore(storePayload) {
+  const response = await fetch(STORE_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json; charset=UTF-8',
+      Accept: 'application/json',
+      'Accept-Charset': 'utf-8',
+    },
+    body: JSON.stringify(storePayload),
+  })
+
+  if (!response.ok) {
+    const parsed = await response.json().catch(() => null)
+    throw new Error(parsed?.message || 'Không thể lưu cửa hàng lên API.')
   }
 }
 
@@ -154,8 +219,22 @@ function resizeImageFile(file, maxDimension = 960, quality = 0.72) {
 
       context.drawImage(image, 0, 0, width, height)
       const compressedDataUrl = canvas.toDataURL('image/jpeg', quality)
-      URL.revokeObjectURL(objectUrl)
-      resolve(compressedDataUrl)
+
+      canvas.toBlob(
+        (blob) => {
+          URL.revokeObjectURL(objectUrl)
+          if (!blob) {
+            reject(new Error('Không thể nén ảnh từ camera.'))
+            return
+          }
+
+          const fileName = file.name?.replace(/\.[^.]+$/, '') || `camera_${Date.now()}`
+          const compressedFile = new File([blob], `${fileName}.jpg`, { type: 'image/jpeg' })
+          resolve({ dataUrl: compressedDataUrl, file: compressedFile })
+        },
+        'image/jpeg',
+        quality
+      )
     }
 
     image.onerror = () => {
@@ -298,8 +377,18 @@ function normalizeDmsCustomers(rawValue) {
     .map((item) => {
       const lat = Number(item?.vi_do)
       const lng = Number(item?.kinh_do)
+      // Map common DMS fields and normalize addresses/names
+      const storeName = item?.tenkh || item?.TenCH || item?.ten || item?.ten_ch || item?.name || ''
+      const address = item?.dia_chi || item?.DiaChi || item?.dc_giao_hangnh || item?.address || ''
+      const ward = item?.phuong || item?.Phuong || ''
+      const province = item?.tinh || item?.Tinh || ''
+
       return {
         ...item,
+        storeName,
+        address,
+        ward,
+        province,
         vi_do_num: Number.isFinite(lat) ? lat : null,
         kinh_do_num: Number.isFinite(lng) ? lng : null,
       }
@@ -327,6 +416,61 @@ async function fetchDmsCustomersByNpp(nppName) {
 
   const parsed = await response.json().catch(() => [])
   return normalizeDmsCustomers(parsed)
+}
+
+function stripAdministrativePrefix(value) {
+  const normalized = String(value || '').trim()
+  if (!normalized) {
+    return ''
+  }
+
+  return normalized
+    .replace(/^(thanh pho|tp\.?|tinh|quan|huyen|thi xa|thi tran|xa|phuong)\s+/i, '')
+    .trim()
+}
+
+function extractWardAndProvinceFromAddress(address) {
+  if (!address || typeof address !== 'object') {
+    return { phuong: '', tinh: '' }
+  }
+
+  const wardRaw =
+    address.suburb ||
+    address.city_district ||
+    address.quarter ||
+    address.neighbourhood ||
+    address.village ||
+    address.town ||
+    ''
+
+  const provinceRaw = address.state || address.city || address.province || ''
+
+  return {
+    phuong: stripAdministrativePrefix(wardRaw),
+    tinh: stripAdministrativePrefix(provinceRaw),
+  }
+}
+
+async function reverseGeocodeWardAndProvince(lat, lng) {
+  const endpoint = new URL('https://nominatim.openstreetmap.org/reverse')
+  endpoint.searchParams.set('format', 'jsonv2')
+  endpoint.searchParams.set('lat', String(lat))
+  endpoint.searchParams.set('lon', String(lng))
+  endpoint.searchParams.set('addressdetails', '1')
+  endpoint.searchParams.set('accept-language', 'vi')
+
+  const response = await fetch(endpoint.toString(), {
+    headers: {
+      Accept: 'application/json',
+    },
+  })
+ 
+  if (!response.ok) {
+    throw new Error('Không thể phân tích địa chỉ từ GPS.')
+  }
+
+  const parsed = await response.json().catch(() => null)
+  return extractWardAndProvinceFromAddress(parsed?.address)
 }
 
 function escapeHtml(value) {
@@ -377,7 +521,9 @@ function App() {
     }
   })
   const [customers, setCustomers] = useState([])
+  const [stores, setStores] = useState([])
   const [selectedCustomer, setSelectedCustomer] = useState(null)
+  const [selectedStore, setSelectedStore] = useState(null)
   const [loginCode, setLoginCode] = useState('')
   const [currentUserCode, setCurrentUserCode] = useState('')
   const [currentUser, setCurrentUser] = useState('')
@@ -387,16 +533,19 @@ function App() {
   const [dmsCustomers, setDmsCustomers] = useState([])
   const [loadingDmsCustomers, setLoadingDmsCustomers] = useState(false)
   const [loadingCustomers, setLoadingCustomers] = useState(false)
+  const [loadingStores, setLoadingStores] = useState(false)
   const [locationData, setLocationData] = useState(null)
   const [photoFile, setPhotoFile] = useState(null)
   const [photoDataUrl, setPhotoDataUrl] = useState('')
-  const [hasConfirmedNoDms, setHasConfirmedNoDms] = useState(false)
+  const [dmsStatus, setDmsStatus] = useState(null)
   const [showExpandedMap, setShowExpandedMap] = useState(false)
+  const [showLocationPrompt, setShowLocationPrompt] = useState(false)
   const [loadingLocation, setLoadingLocation] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [loginError, setLoginError] = useState('')
-  const [blockedBrowserName, setBlockedBrowserName] = useState('')
+  const [blockedBrowserName] = useState(() => getInAppBrowserName(navigator.userAgent))
+  const [showStoreList, setShowStoreList] = useState(false)
 
   const fileInputRef = useRef(null)
   const miniMapRef = useRef(null)
@@ -459,6 +608,26 @@ function App() {
     }
   }
 
+  async function loadStores({ showError = true } = {}) {
+    setLoadingStores(true)
+
+    try {
+      const parsedStores = await fetchStores()
+      setStores(parsedStores)
+      if (showError) {
+        setError('')
+      }
+      return true
+    } catch {
+      if (showError) {
+        setError('Không thể tải lại danh sách thực địa.')
+      }
+      return false
+    } finally {
+      setLoadingStores(false)
+    }
+  }
+
   useEffect(() => {
     let cancelled = false
 
@@ -481,6 +650,27 @@ function App() {
   }, [])
 
   useEffect(() => {
+    let cancelled = false
+
+    async function loadInitialStores() {
+      try {
+        const parsedStores = await fetchStores()
+
+        if (!cancelled) {
+          setStores(parsedStores)
+        }
+      } catch {
+        // Ignore load failures and allow manual refresh from the button.
+      }
+    }
+
+    loadInitialStores()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
     if (!selectedCustomer) {
       return undefined
     }
@@ -494,10 +684,6 @@ function App() {
     window.addEventListener('keydown', handleEsc)
     return () => window.removeEventListener('keydown', handleEsc)
   }, [selectedCustomer])
-
-  useEffect(() => {
-    setBlockedBrowserName(getInAppBrowserName(navigator.userAgent))
-  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -859,10 +1045,15 @@ function App() {
     })
   }
 
-  async function handleGetLocation() {
+  function handleOpenLocationPrompt() {
     setError('')
+    setShowLocationPrompt(true)
+  }
+
+  async function handleResolveLocation() {
+    setShowLocationPrompt(false)
     setLoadingLocation(true)
-    setHasConfirmedNoDms(false)
+    setDmsStatus(null)
 
     try {
       if (miniMapInstanceRef.current) {
@@ -884,8 +1075,23 @@ function App() {
         throw new Error('Quyền vị trí đang bị từ chối. Vui lòng cấp quyền để tiếp tục.')
       }
 
-      const verified = await collectVerifiedLocation(3)
+      const verified = await collectVerifiedLocation(2)
       setLocationData(verified)
+
+      if (Number.isFinite(verified?.lat) && Number.isFinite(verified?.lng)) {
+        // Reverse geocode in background so location flow is responsive.
+        void reverseGeocodeWardAndProvince(verified.lat, verified.lng)
+          .then(({ phuong, tinh }) => {
+            if (phuong || tinh) {
+              setForm((prev) => ({
+                ...prev,
+                phuong: phuong || prev.phuong || '',
+                tinh: tinh || prev.tinh || '',
+              }))
+            }
+          })
+          .catch(() => {})
+      }
 
       if (!verified.trusted) {
         const failedChecks = Object.entries(verified.checks)
@@ -898,13 +1104,19 @@ function App() {
         )
       }
     } catch (err) {
-      setError(err.message || 'Không thể lấy vị trí. Vui lòng thử lại.')
+      const message = err?.message || 'Không thể lấy vị trí. Vui lòng thử lại.'
+      const blockingLocationError = err?.code === 1 || err?.code === 2 || /GPS|định vị|quyền vị trí/i.test(message)
+
+      setError(message)
+      if (blockingLocationError) {
+        setShowLocationPrompt(true)
+      }
     } finally {
       setLoadingLocation(false)
     }
   }
 
-  function handleConfirmNoDms() {
+  function handleSelectDmsStatus(nextStatus) {
     if (!locationData?.trusted) {
       setError('Vị trí chưa đạt chuẩn chống fake. Vui lòng lấy lại vị trí.')
       return
@@ -919,7 +1131,7 @@ function App() {
       npp: detectedNpp,
     }))
     setError('')
-    setHasConfirmedNoDms(true)
+    setDmsStatus(nextStatus)
   }
 
   function handleOpenCamera() {
@@ -944,9 +1156,9 @@ function App() {
     }
 
     try {
-      const optimizedDataUrl = await resizeImageFile(file)
-      setPhotoFile(file)
-      setPhotoDataUrl(optimizedDataUrl)
+      const optimized = await resizeImageFile(file)
+      setPhotoFile(optimized.file)
+      setPhotoDataUrl(optimized.dataUrl)
     } catch {
       setError('Không thể xử lý ảnh từ camera. Vui lòng thử lại.')
     }
@@ -956,19 +1168,12 @@ function App() {
 
   function resetForm() {
     const initial = createInitialForm()
-    setForm({
-      ...initial,
-      kenh: '',
-      loai: '',
-      kv: '',
-      npp: '',
-      nganh_hang: [],
-    })
+    setForm(initial)
     setLocationData(null)
     setDetectedNpp('')
     setDetectedKv('')
-    setDmsCustomers([])
-    setHasConfirmedNoDms(false)
+      setDmsCustomers([])
+      setDmsStatus(null)
     setShowExpandedMap(false)
     setPhotoFile(null)
     setPhotoDataUrl('')
@@ -986,6 +1191,11 @@ function App() {
       const selectedKv = form.kv || ''
       const selectedNpp = form.npp || ''
       const selectedNganhHang = normalizeNganhHang(form.nganh_hang)
+      const tenKhachHang = String(form.ten || '').trim()
+      const tenCuaHang = String(form.ten_ch || '').trim()
+      const diaChi = String(form.dia_chi || '').trim()
+      const phuong = String(form.phuong || '').trim()
+      const tinh = String(form.tinh || '').trim()
 
       const validKenh = CHANNEL_OPTIONS.includes(selectedKenh)
       const validLoai = (channelTypeMap[selectedKenh] || []).includes(selectedLoai)
@@ -995,24 +1205,28 @@ function App() {
         selectedNganhHang.length > 0 &&
         selectedNganhHang.every((item) => normalizedNganhHangOptions.includes(item))
 
-      if (!validKenh || !validLoai || !validKv || !validNpp) {
-        throw new Error('Vui lòng chọn đầy đủ Kênh, Loại, Khu vực và NPP trước khi lưu.')
+      if (dmsStatus === null) {
+        throw new Error('Vui lòng xác nhận trạng thái khách hàng trên DMS trước khi lưu.')
       }
 
-      if (!validNganhHang) {
-        throw new Error('Vui lòng chọn ít nhất 1 ngành hàng kinh doanh hợp lệ trước khi lưu.')
+      if (!validKv || !validNpp) {
+        throw new Error('Vui lòng chọn đầy đủ Khu vực và NPP trước khi lưu.')
       }
 
-      if (!form.ten.trim() || !form.npp.trim()) {
-        throw new Error('Vui lòng nhập đầy đủ tên quán ăn và nhà phân phối.')
+      if (dmsStatus === 'noDms' && !tenKhachHang) {
+        throw new Error('Vui lòng nhập tên khách hàng.')
+      }
+
+      if (!tenCuaHang || !selectedNpp.trim()) {
+        throw new Error('Vui lòng nhập đầy đủ tên cửa hàng và nhà phân phối.')
       }
 
       if (!locationData?.trusted) {
-        throw new Error('Bạn cần lấy vị trí đạt chuẩn trước khi lưu quán ăn.')
+        throw new Error('Bạn cần lấy vị trí đạt chuẩn trước khi lưu cửa hàng.')
       }
 
       if (!photoDataUrl) {
-        throw new Error('Bạn cần chụp ảnh quán ăn trước khi lưu quán ăn.')
+        throw new Error('Bạn cần chụp ảnh cửa hàng.')
       }
       if (!photoFile) {
         throw new Error('Thiếu file ảnh gốc để upload. Vui lòng chụp lại.')
@@ -1020,28 +1234,94 @@ function App() {
 
       const uploadedPath = await uploadCustomerImage(photoFile)
 
-      const payload = {
-        ten: form.ten.trim(),
-        kenh: selectedKenh,
-        loai: form.loai,
-        kv: selectedKv,
-        npp: form.npp.trim(),
-        // send nganh_hang as a comma-separated string to match API expectation
-        nganh_hang: Array.isArray(selectedNganhHang) ? selectedNganhHang.join(',') : String(selectedNganhHang || ''),
-        nguoi_tao: currentUserCode || currentUser,
-        anh: uploadedPath,
-        vi_do: Number(locationData.lat.toFixed(8)),
-        kinh_do: Number(locationData.lng.toFixed(8)),
+      // Collect product fields
+      const productPayload = {}
+      Object.keys(PRODUCT_FIELD_LABELS).forEach((field) => {
+        productPayload[field] = Boolean(form[field])
+      })
+
+      if (dmsStatus === 'noDms') {
+        if (!validKenh || !validLoai) {
+          throw new Error('Vui lòng chọn đầy đủ Kênh và Loại trước khi lưu khách hàng mới.')
+        }
+
+        if (!validNganhHang) {
+          throw new Error('Vui lòng chọn ít nhất 1 ngành hàng kinh doanh hợp lệ trước khi lưu.')
+        }
+
+        if (!diaChi || !phuong || !tinh) {
+          throw new Error('Vui lòng nhập Địa chỉ, Phường, Tỉnh để lưu khách hàng mới.')
+        }
+
+        const customerPayload = {
+          ten: tenKhachHang,
+          kenh: selectedKenh,
+          loai: selectedLoai,
+          kv: selectedKv,
+          npp: selectedNpp.trim(),
+          CoTrenDMS: false,
+          // send nganh_hang as a comma-separated string to match API expectation
+          nganh_hang: Array.isArray(selectedNganhHang)
+            ? selectedNganhHang.join(',')
+            : String(selectedNganhHang || ''),
+          nguoi_tao: currentUserCode || currentUser,
+          anh: uploadedPath,
+          vi_do: Number(locationData.lat.toFixed(8)),
+          kinh_do: Number(locationData.lng.toFixed(8)),
+          ...productPayload,
+        }
+
+        const storePayload = {
+          TenCH: tenCuaHang,
+          DiaChi: diaChi,
+          Phuong: phuong,
+          NPP: selectedNpp.trim(),
+          Tinh: tinh,
+          CoTrenDMS: false,
+          nguoi_tao: currentUser || currentUserCode,
+          ...productPayload,
+          GhiChu: null,
+          HinhAnh: uploadedPath,
+        }
+
+        await Promise.all([saveCustomer(customerPayload), saveStore(storePayload)])
+      } else if (dmsStatus === 'hasDms') {
+        if (!diaChi || !phuong || !tinh) {
+          throw new Error('Khách hàng đã có trên DMS: vui lòng nhập Địa chỉ, Phường, Tỉnh để lưu cửa hàng.')
+        }
+
+        const storePayload = {
+          TenCH: tenCuaHang,
+          DiaChi: diaChi,
+          Phuong: phuong,
+          NPP: selectedNpp.trim(),
+          Tinh: tinh,
+          CoTrenDMS: true,
+          nguoi_tao: currentUser || currentUserCode,
+          ...productPayload,
+          GhiChu: null,
+          HinhAnh: uploadedPath,
+        }
+
+        await saveStore(storePayload)
       }
 
-      await saveCustomer(payload)
-      const reloaded = await loadCustomers({ showError: false })
       resetForm()
-      if (!reloaded) {
-        setError('Đã lưu khách hàng, nhưng không thể tải lại danh sách.')
-      }
+
+      void Promise.all([
+        loadCustomers({ showError: false }),
+        loadStores({ showError: false }),
+      ]).then(([reloadedCustomers, reloadedStores]) => {
+        if (!reloadedCustomers || !reloadedStores) {
+          setError(
+            dmsStatus === 'hasDms'
+              ? 'Đã lưu cửa hàng, nhưng không thể tải lại danh sách.'
+              : 'Đã lưu khách hàng, nhưng không thể tải lại danh sách.'
+          )
+        }
+      })
     } catch (err) {
-      setError(err.message || 'Không thể lưu khách hàng.')
+      setError(err.message || 'Không thể lưu dữ liệu.')
     } finally {
       setSubmitting(false)
     }
@@ -1141,11 +1421,11 @@ function App() {
 
           <div className="card-block">
             <div className="row-between">
-              <h3>Xác nhận khách hàng chưa có trong DMS</h3>
+              <h3>Xác nhận trạng thái khách hàng trên DMS</h3>
               <span className={`status ${locationBadge.tone}`}>{locationBadge.label}</span>
             </div>
             <div className="row-buttons">
-              <button type="button" onClick={handleGetLocation} disabled={loadingLocation}>
+              <button type="button" onClick={handleOpenLocationPrompt} disabled={loadingLocation}>
                 {loadingLocation
                   ? 'Đang lấy vị trí...'
                   : locationData
@@ -1186,111 +1466,196 @@ function App() {
             <div className="row-buttons" style={{ marginTop: 10 }}>
               <button
                 type="button"
-                onClick={handleConfirmNoDms}
+                className={dmsStatus === 'noDms' ? 'active-choice' : ''}
+                onClick={() => handleSelectDmsStatus('noDms')}
                 disabled={!locationData?.trusted || !detectedNpp || !detectedKv}
               >
-                {hasConfirmedNoDms ? 'Đã xác nhận khách hàng chưa có trong DMS' : 'Xác nhận khách hàng chưa có trong DMS'}
+                {dmsStatus === 'noDms'
+                  ? 'Đã chọn khách hàng chưa có trên DMS'
+                  : 'Khách hàng chưa có trên DMS'}
+              </button>
+              <button
+                type="button"
+                className={`${dmsStatus === 'hasDms' ? 'active-choice' : ''} ghost`.trim()}
+                onClick={() => handleSelectDmsStatus('hasDms')}
+                disabled={!locationData?.trusted || !detectedNpp || !detectedKv}
+              >
+                {dmsStatus === 'hasDms'
+                  ? 'Đã chọn khách hàng đã có trên DMS'
+                  : 'Khách hàng đã có trên DMS'}
               </button>
             </div>
           </div>
 
-          {!hasConfirmedNoDms ? (
-            <p className="hint">Hoàn tất bước xác nhận vị trí ở trên để mở phần nhập khách hàng.</p>
+          {dmsStatus === null ? (
+            <p className="hint">Hoàn tất bước xác nhận trạng thái DMS ở trên để mở phần nhập thông tin.</p>
           ) : (
             <>
+              {dmsStatus === 'noDms' && (
+                <label>
+                  Tên khách hàng
+                  <input
+                    required
+                    value={form.ten}
+                    onChange={(event) => updateField('ten', event.target.value)}
+                    placeholder="Nhập tên khách hàng"
+                    autoComplete="organization"
+                    enterKeyHint="next"
+                  />
+                </label>
+              )}
+
               <label>
-                Tên khách hàng
+                Tên cửa hàng
                 <input
                   required
-                  value={form.ten}
-                  onChange={(event) => updateField('ten', event.target.value)}
-                  placeholder="Nhập tên khách hàng"
+                  value={form.ten_ch || ''}
+                  onChange={(event) => updateField('ten_ch', event.target.value)}
+                  placeholder="Nhập tên cửa hàng"
                   autoComplete="organization"
-                  enterKeyHint="next"
                 />
               </label>
 
               <div className="grid-2">
-            <label>
-              Kênh
-              <select value={form.kenh} onChange={(event) => updateField('kenh', event.target.value)}>
-                <option value="">
-                  chọn kênh
-                </option>
-                {CHANNEL_OPTIONS.map((channel) => (
-                  <option value={channel} key={channel}>
-                    {channel}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <label>
+                  Địa chỉ
+                  <input
+                    value={form.dia_chi || ''}
+                    onChange={(event) => updateField('dia_chi', event.target.value)}
+                    placeholder="Nhập địa chỉ cửa hàng"
+                    autoComplete="street-address"
+                  />
+                </label>
 
-            <label>
-              Loại
-              <select value={form.loai} onChange={(event) => updateField('loai', event.target.value)}>
-                <option value="">
-                  chọn loại
-                </option>
-                {(channelTypeMap[form.kenh] || []).map((type) => (
-
-                  <option value={type} key={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <label>
+                  Phường
+                  <input
+                    value={form.phuong || ''}
+                    onChange={(event) => updateField('phuong', event.target.value)}
+                    placeholder="Nhập phường"
+                    autoComplete="address-level3"
+                  />
+                </label>
               </div>
 
               <div className="grid-2">
-            <label>
-              Khu vực
-              <select value={form.kv} onChange={(event) => updateField('kv', event.target.value)}>
-                <option value="">
-                  chọn Khu vực
-                </option>
-                {KV_OPTIONS.map((kv) => (
-                  <option value={kv} key={kv}>
-                    {kv}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <label>
+                  Tỉnh/Thành
+                  <input
+                    value={form.tinh || ''}
+                    onChange={(event) => updateField('tinh', event.target.value)}
+                    placeholder="Nhập tỉnh/thành"
+                    autoComplete="address-level1"
+                  />
+                </label>
 
-            <label>
-              NPP
-              <select value={form.npp} onChange={(event) => updateField('npp', event.target.value)}>
-                <option value="">
-                  chọn NPP
-                </option>
-                {(nppByKV[form.kv] || []).map((npp) => (
-                  <option value={npp} key={npp}>
-                    {npp}
-                  </option>
-                ))}
-              </select>
-            </label>
-            
+                <label>
+                  NPP
+                  <select value={form.npp} onChange={(event) => updateField('npp', event.target.value)}>
+                    <option value="">
+                      chọn NPP
+                    </option>
+                    {(nppByKV[form.kv] || []).map((npp) => (
+                      <option value={npp} key={npp}>
+                        {npp}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
-<div className="card-block">
-              <h3>Ngành hàng kinh doanh</h3>
-              <p className="hint">Chọn các ngành hàng mà khách hàng đang kinh doanh</p>
-              <div className="checkbox-group">
-                {nganh_hang_options.map((option) => (
-                  <label key={option} className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={normalizeNganhHang(form.nganh_hang).includes(String(option || '').trim())}
-                      onChange={() => handleNganhHangChange(option)}
-                    />
-                    <span>{option}</span>
-                  </label>
-                ))}
+
+              <div className="grid-2">
+                <label>
+                  Khu vực
+                  <select value={form.kv} onChange={(event) => updateField('kv', event.target.value)}>
+                    <option value="">
+                      chọn Khu vực
+                    </option>
+                    {KV_OPTIONS.map((kv) => (
+                      <option value={kv} key={kv}>
+                        {kv}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
-              {form.nganh_hang.length > 0 && (
-                <div className="selected-info">
-                  Đã chọn: {form.nganh_hang.length} ngành hàng
+
+              {dmsStatus === 'noDms' ? (
+                <>
+                  <div className="grid-2">
+                    <label>
+                      Kênh
+                      <select value={form.kenh} onChange={(event) => updateField('kenh', event.target.value)}>
+                        <option value="">
+                          chọn kênh
+                        </option>
+                        {CHANNEL_OPTIONS.map((channel) => (
+                          <option value={channel} key={channel}>
+                            {channel}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label>
+                      Loại
+                      <select value={form.loai} onChange={(event) => updateField('loai', event.target.value)}>
+                        <option value="">
+                          chọn loại
+                        </option>
+                        {(channelTypeMap[form.kenh] || []).map((type) => (
+                          <option value={type} key={type}>
+                            {type}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className="card-block">
+                    <h3>Ngành hàng kinh doanh</h3>
+                    <p className="hint">Chọn các ngành hàng mà khách hàng đang kinh doanh</p>
+                    <div className="checkbox-group">
+                      {nganh_hang_options.map((option) => (
+                        <label key={option} className="checkbox-label">
+                          <input
+                            type="checkbox"
+                            checked={normalizeNganhHang(form.nganh_hang).includes(String(option || '').trim())}
+                            onChange={() => handleNganhHangChange(option)}
+                          />
+                          <span>{option}</span>
+                        </label>
+                      ))}
+                    </div>
+                    {form.nganh_hang.length > 0 && (
+                      <div className="selected-info">
+                        Đã chọn: {form.nganh_hang.length} ngành hàng
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : null}
+
+            <div className="card-block">
+              <h3>Sản phẩm hiện có</h3>
+              <p className="hint">Chọn các sản phẩm mà khách hàng đang bán</p>
+              {Object.entries(PRODUCT_GROUPS).map(([key, group]) => (
+                <div key={key} className="product-group">
+                  <h4>{group.label}</h4>
+                  <div className="checkbox-group">
+                    {group.fields.map((field) => (
+                      <label key={field} className="checkbox-label">
+                        <input
+                          type="checkbox"
+                          checked={form[field] || false}
+                          onChange={(event) => updateField(field, event.target.checked)}
+                        />
+                        <span>{PRODUCT_FIELD_LABELS[field] || field}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
-              )}
+              ))}
             </div>
 
           <div className="card-block">
@@ -1318,7 +1683,7 @@ function App() {
 
           <div className="row-buttons action-bar">
             <button type="submit" disabled={submitting}>
-              {submitting ? 'Đang lưu...' : 'Lưu khách hàng'}
+              {submitting ? 'Đang lưu...' : dmsStatus === 'hasDms' ? 'Lưu cửa hàng' : 'Lưu khách hàng'}
             </button>
             <button type="button" className="ghost" onClick={resetForm}>
               Làm mới
@@ -1328,21 +1693,60 @@ function App() {
 
         <aside className="panel list-panel">
           <div className="row-between">
-            <h2>Danh sách khách hàng</h2>
+            <h2>{showStoreList ? 'Danh sách thực địa' : 'Danh sách khách hàng'}</h2>
             <div className="list-actions">
               <button
                 type="button"
                 className="ghost refresh-btn"
-                onClick={loadCustomers}
-                disabled={loadingCustomers}
+                onClick={async () => {
+                  await Promise.all([loadCustomers(), loadStores()])
+                }}
+                disabled={loadingCustomers || loadingStores}
               >
-                {loadingCustomers ? 'Đang tải...' : 'Tải lại'}
+                {loadingCustomers || loadingStores ? 'Đang tải...' : 'Tải lại'}
               </button>
-              <span className="count">{visibleCustomers.length}</span>
+              <button
+                type="button"
+                className="ghost refresh-btn"
+                onClick={async () => {
+                  setShowStoreList((prev) => !prev)
+                  await loadStores()
+                }}
+                disabled={loadingStores}
+              >
+                {loadingStores ? 'Đang tải...' : showStoreList ? 'Xem khách hàng' : 'Danh sách thực địa'}
+              </button>
+              <span className="count">{showStoreList ? stores.length : visibleCustomers.length}</span>
             </div>
           </div>
 
-          {!visibleCustomers.length ? (
+          {showStoreList ? (
+            !stores.length ? (
+              <p className="empty">Chưa có dữ liệu thực địa.</p>
+            ) : (
+              <div className="customer-list">
+                {stores.map((store) => (
+                  <article key={store.id || `${store.TenCH}-${store.NPP}`} className="customer-item">
+                    <div className="row-between">
+                      <strong>{store.TenCH || '—'}</strong>
+                      <span className="count">#{store.id || 'moi'}</span>
+                    </div>
+                    <p>{store.DiaChi || '—'}</p>
+                    <p>{store.Phuong || '—'} - {store.Tinh || '—'}</p>
+                    <p>NPP: {store.NPP || '—'}</p>
+                    <p>DMS: {store.CoTrenDMS ? 'Có' : 'Không'}</p>
+                    <button
+                      type="button"
+                      className="ghost detail-btn"
+                      onClick={() => setSelectedStore(store)}
+                    >
+                      Xem chi tiết
+                    </button>
+                  </article>
+                ))}
+              </div>
+            )
+          ) : !visibleCustomers.length ? (
             <p className="empty">Chưa có dữ liệu. Tạo khách hàng đầu tiên để bắt đầu.</p>
           ) : (
             <div className="customer-list">
@@ -1373,6 +1777,62 @@ function App() {
           )}
         </aside>
       </section>
+
+      {showLocationPrompt ? (
+        <div
+          className="modal-overlay location-permission-overlay"
+          role="presentation"
+          onClick={() => setShowLocationPrompt(false)}
+        >
+          <section
+            className="modal-panel location-permission-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Bật GPS và cấp quyền vị trí"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="location-permission-hero">
+              <span className="location-permission-badge">GPS chính xác nhất</span>
+              <h3>Bắt buộc bật GPS và cấp quyền vị trí.</h3>
+              <p>Nếu không bật định vị, tính năng này sẽ không hoạt động.</p>
+            </div>
+
+            <div className="location-permission-list">
+              <div className="location-permission-item">
+                <span className="location-permission-dot" />
+                <div>
+                  <strong>Bật định vị</strong>
+                  <p>Điện thoại hoặc máy tính phải mở GPS/dịch vụ vị trí.</p>
+                </div>
+              </div>
+              <div className="location-permission-item">
+                <span className="location-permission-dot" />
+                <div>
+                  <strong>Cho phép truy cập</strong>
+                  <p>Chọn cho phép để app lấy tọa độ GPS chính xác nhất.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="location-permission-actions">
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => {
+                  setShowLocationPrompt(false)
+                  setError('')
+                }}
+                disabled={loadingLocation}
+              >
+                Đóng
+              </button>
+              <button type="button" onClick={handleResolveLocation} disabled={loadingLocation}>
+                Tôi đã bật GPS
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {selectedCustomer ? (
         <div
@@ -1443,6 +1903,56 @@ function App() {
                 </>
               ) : (
                 <p>Chưa có tọa độ GPS.</p>
+              )}
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {selectedStore ? (
+        <div
+          className="modal-overlay"
+          role="presentation"
+          onClick={() => setSelectedStore(null)}
+        >
+          <section
+            className="modal-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Chi tiết thực địa"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="row-between modal-header">
+              <h3>Chi tiết thực địa</h3>
+              <button type="button" className="ghost close-btn" onClick={() => setSelectedStore(null)}>
+                Đóng
+              </button>
+            </div>
+
+            <div className="modal-content">
+              <p><strong>Tên CH:</strong> {selectedStore.TenCH || '—'}</p>
+              <p><strong>Địa chỉ:</strong> {selectedStore.DiaChi || '—'}</p>
+              <p><strong>Phường:</strong> {selectedStore.Phuong || '—'}</p>
+              <p><strong>Tỉnh:</strong> {selectedStore.Tinh || '—'}</p>
+              <p><strong>NPP:</strong> {selectedStore.NPP || '—'}</p>
+              <p><strong>CoTrenDMS:</strong> {selectedStore.CoTrenDMS ? 'Có' : 'Không'}</p>
+              <p>
+                <strong>Sản phẩm hiện có:</strong>{' '}
+                {Object.keys(PRODUCT_FIELD_LABELS)
+                  .filter((field) => Boolean(selectedStore[field]))
+                  .map((field) => PRODUCT_FIELD_LABELS[field])
+                  .join(', ') || '—'}
+              </p>
+              <p><strong>Ghi chú:</strong> {selectedStore.GhiChu || '—'}</p>
+
+              {selectedStore.HinhAnh ? (
+                <img
+                  src={toImageDataUrl(selectedStore.HinhAnh)}
+                  alt={`Ảnh thực địa ${selectedStore.TenCH || ''}`}
+                  className="modal-image"
+                />
+              ) : (
+                <p>Chưa có ảnh thực địa.</p>
               )}
             </div>
           </section>

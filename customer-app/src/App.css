@@ -423,6 +423,17 @@ button:active {
   color: var(--muted);
 }
 
+.active-choice {
+  border-color: var(--button-bg);
+  background: linear-gradient(135deg, rgba(220, 59, 44, 0.92), rgba(232, 113, 103, 0.9));
+  color: #fff;
+  box-shadow: 0 10px 22px rgba(220, 59, 44, 0.2);
+}
+
+.active-choice:hover {
+  filter: brightness(1.02);
+}
+
 .preview {
   width: 100%;
   margin-top: 8px;
@@ -530,6 +541,136 @@ button:active {
   border: 1px solid var(--border);
   box-shadow: 0 -18px 38px rgba(73, 28, 18, 0.18);
   padding: 12px 10px 14px;
+}
+
+.location-permission-overlay {
+  align-items: center;
+  padding: 16px;
+  background: rgba(28, 17, 11, 0.72);
+  backdrop-filter: blur(12px);
+}
+
+.location-permission-panel {
+  width: min(640px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow: hidden;
+  padding: 0;
+  border-radius: 26px;
+  border: 1px solid rgba(182, 49, 42, 0.14);
+  background: linear-gradient(180deg, rgba(255, 253, 248, 0.99), rgba(255, 242, 230, 0.98));
+  box-shadow: 0 28px 80px rgba(28, 17, 11, 0.28);
+}
+
+.location-permission-hero {
+  position: relative;
+  padding: 22px 20px 18px;
+  background:
+    radial-gradient(circle at top right, rgba(243, 91, 62, 0.2), transparent 32%),
+    linear-gradient(135deg, rgba(255, 252, 247, 0.98), rgba(255, 236, 221, 0.98));
+  border-bottom: 1px solid rgba(182, 49, 42, 0.1);
+}
+
+.location-permission-hero::after {
+  content: '';
+  position: absolute;
+  inset: auto 20px -2px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f35b3e, #b61c28, transparent);
+  opacity: 0.45;
+}
+
+.location-permission-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(182, 49, 42, 0.14);
+  color: #b6282a;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.location-permission-hero h3 {
+  margin: 12px 0 8px;
+  font-size: 24px;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.location-permission-hero p {
+  margin: 0;
+  color: #6e4a3a;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.location-permission-list {
+  display: grid;
+  gap: 12px;
+  padding: 18px 20px 6px;
+}
+
+.location-permission-item {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 14px 14px 14px 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(182, 49, 42, 0.1);
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 10px 18px rgba(166, 45, 33, 0.04);
+}
+
+.location-permission-item strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 14px;
+  color: #3d241d;
+}
+
+.location-permission-item p {
+  margin: 0;
+  color: #6f5548;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.location-permission-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  margin-top: 4px;
+  background: linear-gradient(135deg, #f35b3e, #b61c28);
+  box-shadow: 0 0 0 5px rgba(243, 91, 62, 0.12);
+}
+
+.location-permission-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding: 16px 20px 20px;
+}
+
+.location-permission-actions .ghost {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(182, 49, 42, 0.18);
+}
+
+.location-permission-actions button:last-child {
+  background: linear-gradient(135deg, #f35b3e, #b61c28);
+  border-color: rgba(182, 28, 40, 0.8);
+  box-shadow: 0 14px 28px rgba(166, 45, 33, 0.18);
+}
+
+.location-permission-actions button:last-child:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 32px rgba(166, 45, 33, 0.22);
 }
 
 .modal-header h3 {
@@ -827,6 +968,22 @@ button:active {
     border-radius: 18px;
     padding: 14px;
   }
+
+  .location-permission-hero {
+    padding: 26px 24px 20px;
+  }
+
+  .location-permission-hero h3 {
+    font-size: 26px;
+  }
+
+  .location-permission-list {
+    padding: 20px 24px 8px;
+  }
+
+  .location-permission-actions {
+    padding: 18px 24px 24px;
+  }
 }
 
 @media (min-width: 980px) {
@@ -862,4 +1019,24 @@ button:active {
   .list-panel {
     min-height: 0;
   }
+}
+
+/* Product group styles */
+.product-group {
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.product-group:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.product-group h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
 }

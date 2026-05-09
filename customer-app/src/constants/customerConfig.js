@@ -123,3 +123,52 @@ export const ADMIN_CODE_MAP = {
   ADHUNG: 'Nguyễn Mạnh Hùng',
   ADTEST: 'Admin Test',
 }
+
+// Product categories and their checkbox fields
+export const PRODUCT_GROUPS = {
+  acbt: {
+    label: 'Kệ Trưng Bày',
+    fields: ['CoKeACBT', 'TraThuongTB', 'CoHangDoiThuKhong', 'DoiThuLays', 'DoiThuOishi', 'DoiThuPoca', 'DoiThuKhac'],
+  },
+  viHang: {
+    label: 'Vỉ Treo',
+    fields: ['CoViACBT', 'CoHangDoiThuVi', 'ViDoiThuLays', 'ViDoiThuOishi', 'ViDoiThuPoca', 'ViDoiThuKhac'],
+  },
+  chanGa: {
+    label: 'Bảo Phủ - Chân Gà',
+    fields: ['ChanGaACBT', 'ChanGaDoiThu'],
+  },
+  bimKho: {
+    label: 'Bảo Phủ - Snack Khô',
+    fields: ['BimKhoACBT', 'BimKhoDoiThuLays', 'BimKhoDoiThuOishi', 'BimKhoDoiThuPoca', 'BimKhoDoiThuKhac'],
+  },
+  bimUot: {
+    label: 'Bảo Phủ - Snack Ướt',
+    fields: ['BimUotACBT', 'BimUotDoiThu'],
+  },
+}
+
+export const PRODUCT_FIELD_LABELS = {
+  CoKeACBT: 'Có kệ ACBT',
+  CoHangDoiThuKhong: 'Có kệ hàng Đối thủ',
+  TraThuongTB: 'Có kệ trả thường TB',
+  DoiThuLays: "Kệ Lay's",
+  DoiThuOishi: 'Kệ Oishi',
+  DoiThuPoca: 'Kệ Poca',
+  DoiThuKhac: 'Kệ Khác',
+  CoViACBT: 'Có vỉ ACBT',
+  CoHangDoiThuVi: 'Có vỉ hàng Đối thủ không',
+  ViDoiThuLays: "Vỉ Lay's",
+  ViDoiThuOishi: 'Vỉ Oishi',
+  ViDoiThuPoca: 'Vỉ Poca',
+  ViDoiThuKhac: 'Vỉ Khác',
+  ChanGaACBT: 'Chân Gà ACBT',
+  ChanGaDoiThu: 'Chân Gà Đối Thủ',
+  BimKhoACBT: 'Snack ACBT',
+  BimKhoDoiThuLays: "Snack Lay's",
+  BimKhoDoiThuOishi: 'Snack Oishi',
+  BimKhoDoiThuPoca: 'Snack Poca',
+  BimKhoDoiThuKhac: 'Snack Khác',
+  BimUotACBT: 'Snack Ướt ACBT',
+  BimUotDoiThu: 'Snack Ướt Đối Thủ',
+}
