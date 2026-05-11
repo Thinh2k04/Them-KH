@@ -588,6 +588,22 @@ function App() {
     )
   }, [customers, currentUser, currentUserCode])
 
+  const visibleStores = useMemo(() => {
+    if (!currentUser) {
+      return []
+    }
+
+    const allowedCreators = new Set(
+      [currentUserCode, currentUser]
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+    )
+
+    return normalizeStores(stores).filter((store) =>
+      allowedCreators.has(String(store?.nguoi_tao || '').trim())
+    )
+  }, [stores, currentUser, currentUserCode])
+
   async function loadCustomers({ showError = true } = {}) {
     setLoadingCustomers(true)
 
@@ -1739,16 +1755,16 @@ function App() {
               >
                 {loadingStores ? 'Đang tải...' : showStoreList ? 'Xem khách hàng' : 'Danh sách thực địa'}
               </button>
-              <span className="count">{showStoreList ? stores.length : visibleCustomers.length}</span>
+              <span className="count">{showStoreList ? visibleStores.length : visibleCustomers.length}</span>
             </div>
           </div>
 
           {showStoreList ? (
-            !stores.length ? (
+            !visibleStores.length ? (
               <p className="empty">Chưa có dữ liệu thực địa.</p>
             ) : (
               <div className="customer-list">
-                {stores.map((store) => (
+                {visibleStores.map((store) => (
                   <article key={store.id || `${store.TenCH}-${store.NPP}`} className="customer-item">
                     <div className="row-between">
                       <strong>{store.TenCH || '—'}</strong>
