@@ -546,6 +546,8 @@ function App() {
   const [loginError, setLoginError] = useState('')
   const [blockedBrowserName] = useState(() => getInAppBrowserName(navigator.userAgent))
   const [showStoreList, setShowStoreList] = useState(false)
+  const [searchCustomer, setSearchCustomer] = useState('')
+  const [searchStore, setSearchStore] = useState('')
 
   const fileInputRef = useRef(null)
   const miniMapRef = useRef(null)
@@ -603,6 +605,34 @@ function App() {
       allowedCreators.has(String(store?.nguoi_tao || '').trim())
     )
   }, [stores, currentUser, currentUserCode])
+
+  const filteredVisibleCustomers = useMemo(() => {
+    if (!searchCustomer.trim()) {
+      return visibleCustomers
+    }
+
+    const lowerSearch = searchCustomer.toLowerCase()
+    return visibleCustomers.filter((customer) => {
+      const ten = String(customer?.ten || '').toLowerCase()
+      const npp = String(customer?.npp || '').toLowerCase()
+      const loai = String(customer?.loai || '').toLowerCase()
+      return ten.includes(lowerSearch) || npp.includes(lowerSearch) || loai.includes(lowerSearch)
+    })
+  }, [visibleCustomers, searchCustomer])
+
+  const filteredVisibleStores = useMemo(() => {
+    if (!searchStore.trim()) {
+      return visibleStores
+    }
+
+    const lowerSearch = searchStore.toLowerCase()
+    return visibleStores.filter((store) => {
+      const tenCH = String(store?.TenCH || '').toLowerCase()
+      const diaChi = String(store?.DiaChi || '').toLowerCase()
+      const npp = String(store?.NPP || '').toLowerCase()
+      return tenCH.includes(lowerSearch) || diaChi.includes(lowerSearch) || npp.includes(lowerSearch)
+    })
+  }, [visibleStores, searchStore])
 
   async function loadCustomers({ showError = true } = {}) {
     setLoadingCustomers(true)
@@ -1755,16 +1785,24 @@ function App() {
               >
                 {loadingStores ? 'Đang tải...' : showStoreList ? 'Xem khách hàng' : 'Danh sách thực địa'}
               </button>
-              <span className="count">{showStoreList ? visibleStores.length : visibleCustomers.length}</span>
+              <span className="count">{showStoreList ? filteredVisibleStores.length : filteredVisibleCustomers.length}</span>
             </div>
           </div>
 
+          <input
+            type="text"
+            placeholder={showStoreList ? 'Tìm kiếm thực địa...' : 'Tìm kiếm khách hàng...'}
+            value={showStoreList ? searchStore : searchCustomer}
+            onChange={(event) => (showStoreList ? setSearchStore(event.target.value) : setSearchCustomer(event.target.value))}
+            style={{ width: '100%', padding: '10px 14px', marginBottom: '15px', borderRadius: '12px', border: '1px solid #e0e0e0', fontSize: '14px',marginTop: '18px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}
+          />
+
           {showStoreList ? (
-            !visibleStores.length ? (
-              <p className="empty">Chưa có dữ liệu thực địa.</p>
+            !filteredVisibleStores.length ? (
+              <p className="empty">{visibleStores.length === 0 ? 'Chưa có dữ liệu thực địa.' : 'Không tìm thấy thực địa.'}</p>
             ) : (
               <div className="customer-list">
-                {visibleStores.map((store) => (
+                {filteredVisibleStores.map((store) => (
                   <article key={store.id || `${store.TenCH}-${store.NPP}`} className="customer-item">
                     <div className="row-between">
                       <strong>{store.TenCH || '—'}</strong>
@@ -1785,11 +1823,11 @@ function App() {
                 ))}
               </div>
             )
-          ) : !visibleCustomers.length ? (
-            <p className="empty">Chưa có dữ liệu. Tạo khách hàng đầu tiên để bắt đầu.</p>
+          ) : !filteredVisibleCustomers.length ? (
+            <p className="empty">{visibleCustomers.length === 0 ? 'Chưa có dữ liệu. Tạo khách hàng đầu tiên để bắt đầu.' : 'Không tìm thấy khách hàng.'}</p>
           ) : (
             <div className="customer-list">
-              {visibleCustomers.map((customer) => (
+              {filteredVisibleCustomers.map((customer) => (
                 <article key={customer.id || `${customer.ten}-${customer.ngay_tao}`} className="customer-item">
                   <div className="row-between">
                     <strong>{customer.ten}</strong>
