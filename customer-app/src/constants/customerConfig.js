@@ -128,11 +128,11 @@ export const ADMIN_CODE_MAP = {
 export const PRODUCT_GROUPS = {
   acbt: {
     label: 'Kệ Trưng Bày',
-    fields: ['CoKeACBT', 'TraThuongTB', 'CoHangDoiThuKhong', 'DoiThuLays', 'DoiThuOishi', 'DoiThuPoca', 'DoiThuKhac'],
+    fields: ['CoKeACBT', 'TraThuongTB', 'CoHangDoiThuKhong', 'DoiThuLays', 'DoiThuOishi', 'DoiThuPoca', 'DoiThuOrion', 'DoiThuKhac'],
   },
   viHang: {
     label: 'Vỉ Treo',
-    fields: ['CoViACBT', 'CoHangDoiThuVi', 'ViDoiThuLays', 'ViDoiThuOishi', 'ViDoiThuPoca', 'ViDoiThuKhac'],
+    fields: ['CoViACBT', 'CoHangDoiThuVi', 'ViDoiThuLays', 'ViDoiThuOishi', 'ViDoiThuPoca', 'ViDoiThuOrion', 'ViDoiThuKhac'],
   },
   chanGa: {
     label: 'Bảo Phủ - Chân Gà',
@@ -140,7 +140,7 @@ export const PRODUCT_GROUPS = {
   },
   bimKho: {
     label: 'Bảo Phủ - Snack Khô',
-    fields: ['BimKhoACBT', 'BimKhoDoiThuLays', 'BimKhoDoiThuOishi', 'BimKhoDoiThuPoca', 'BimKhoDoiThuKhac'],
+    fields: ['BimKhoACBT', 'BimKhoDoiThuLays', 'BimKhoDoiThuOishi', 'BimKhoDoiThuPoca', 'BimKhoDoiThuOrion', 'BimKhoDoiThuKhac'],
   },
   bimUot: {
     label: 'Bảo Phủ - Snack Ướt',
@@ -156,12 +156,14 @@ export const PRODUCT_FIELD_LABELS = {
   DoiThuOishi: 'Kệ Oishi',
   DoiThuPoca: 'Kệ Poca',
   DoiThuKhac: 'Kệ Khác',
+  DoiThuOrion: 'Kệ Orion',
   CoViACBT: 'Có vỉ ACBT',
   CoHangDoiThuVi: 'Có vỉ hàng Đối thủ không',
   ViDoiThuLays: "Vỉ Lay's",
   ViDoiThuOishi: 'Vỉ Oishi',
   ViDoiThuPoca: 'Vỉ Poca',
   ViDoiThuKhac: 'Vỉ Khác',
+  ViDoiThuOrion: 'Vỉ Orion',
   ChanGaACBT: 'Chân Gà ACBT',
   ChanGaDoiThu: 'Chân Gà Đối Thủ',
   BimKhoACBT: 'Snack ACBT',
@@ -169,6 +171,7 @@ export const PRODUCT_FIELD_LABELS = {
   BimKhoDoiThuOishi: 'Snack Oishi',
   BimKhoDoiThuPoca: 'Snack Poca',
   BimKhoDoiThuKhac: 'Snack Khác',
+  BimKhoDoiThuOrion: 'Snack Orion',
   BimUotACBT: 'Snack Ướt ACBT',
   BimUotDoiThu: 'Snack Ướt Đối Thủ',
 }
