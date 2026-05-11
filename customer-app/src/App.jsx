@@ -1193,6 +1193,8 @@ function App() {
       const selectedNganhHang = normalizeNganhHang(form.nganh_hang)
       const tenKhachHang = String(form.ten || '').trim()
       const tenCuaHang = String(form.ten_ch || '').trim()
+      const ghiChuCuaHang = String(form.ghi_chu || '').trim()
+      const ghiChuKhachHang = String(form.ghi_chu_kh || '').trim()
       const diaChi = String(form.dia_chi || '').trim()
       const phuong = String(form.phuong || '').trim()
       const tinh = String(form.tinh || '').trim()
@@ -1268,11 +1270,13 @@ function App() {
           anh: uploadedPath,
           vi_do: Number(locationData.lat.toFixed(8)),
           kinh_do: Number(locationData.lng.toFixed(8)),
+          ghi_chu: ghiChuKhachHang || null,
           ...productPayload,
         }
 
         const storePayload = {
           TenCH: tenCuaHang,
+          GhiChu: ghiChuCuaHang || null,
           DiaChi: diaChi,
           Phuong: phuong,
           NPP: selectedNpp.trim(),
@@ -1280,7 +1284,6 @@ function App() {
           CoTrenDMS: false,
           nguoi_tao: currentUser || currentUserCode,
           ...productPayload,
-          GhiChu: null,
           HinhAnh: uploadedPath,
         }
 
@@ -1292,6 +1295,7 @@ function App() {
 
         const storePayload = {
           TenCH: tenCuaHang,
+          GhiChu: ghiChuCuaHang || null,
           DiaChi: diaChi,
           Phuong: phuong,
           NPP: selectedNpp.trim(),
@@ -1299,7 +1303,6 @@ function App() {
           CoTrenDMS: true,
           nguoi_tao: currentUser || currentUserCode,
           ...productPayload,
-          GhiChu: null,
           HinhAnh: uploadedPath,
         }
 
@@ -1633,6 +1636,16 @@ function App() {
                       </div>
                     )}
                   </div>
+
+                  <label>
+                    Ghi chú khách hàng
+                    <textarea
+                      value={form.ghi_chu_kh || ''}
+                      onChange={(event) => updateField('ghi_chu_kh', event.target.value)}
+                      placeholder="Nhập ghi chú khách hàng"
+                      rows={3}
+                    />
+                  </label>
                 </>
               ) : null}
 
@@ -1656,6 +1669,16 @@ function App() {
                   </div>
                 </div>
               ))}
+
+              <label>
+                Ghi chú cửa hàng
+                <textarea
+                  value={form.ghi_chu || ''}
+                  onChange={(event) => updateField('ghi_chu', event.target.value)}
+                  placeholder="Nhập ghi chú cửa hàng"
+                  rows={3}
+                />
+              </label>
             </div>
 
           <div className="card-block">

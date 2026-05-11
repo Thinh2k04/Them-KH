@@ -19,6 +19,8 @@ export function createInitialForm() {
   return {
     ten: '',
     ten_ch: '',
+    ghi_chu: '',
+    ghi_chu_kh: '',
     dia_chi: '',
     phuong: '',
     tinh: '',
