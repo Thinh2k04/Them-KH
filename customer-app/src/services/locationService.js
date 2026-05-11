@@ -78,7 +78,7 @@ function buildSecurityChecks(summary) {
   const networkInfo = getNetworkInfo()
 
   const checks = {
-    accuracyOk: Number.isFinite(summary.avgAccuracy) && summary.avgAccuracy > 2 && summary.avgAccuracy <= 50,
+    accuracyOk: Number.isFinite(summary.avgAccuracy) && summary.avgAccuracy > 1.5 && summary.avgAccuracy <= 50,
     spreadOk: Number.isFinite(summary.maxSpread) && summary.maxSpread <= 20,
     freshOk: Number.isFinite(summary.ageMs) && summary.ageMs <= 20000,
     speedOk: Number.isFinite(summary.maxSpeedKmH) && summary.maxSpeedKmH <= 150,

@@ -970,7 +970,7 @@ function App() {
     return () => {
       cancelled = true
     }
-  }, [detectedNpp])
+  }, [detectedNpp, locationData])
 
   function handleLoginSubmit(event) {
     event.preventDefault()
