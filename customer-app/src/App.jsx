@@ -1285,12 +1285,16 @@ function App() {
 
   function resetForm() {
     const initial = createInitialForm()
-    setForm(initial)
+    setForm({
+      ...initial,
+      kenh: '',
+      loai: '',
+    })
     setLocationData(null)
     setDetectedNpp('')
     setDetectedKv('')
-      setDmsCustomers([])
-      setDmsStatus(null)
+    setDmsCustomers([])
+    setDmsStatus(null)
     setShowExpandedMap(false)
     setPhotoFile(null)
     setPhotoDataUrl('')
