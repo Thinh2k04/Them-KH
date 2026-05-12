@@ -23,8 +23,8 @@ import './App.css'
 
 const CUSTOMER_API_URL = 'https://jsk9x6z4-3000.asse.devtunnels.ms/api/khachhang/'
 const API_ORIGIN = new URL(CUSTOMER_API_URL).origin
-const DMS_CUSTOMER_API_URL = 'https://jsk9x6z4-3000.asse.devtunnels.ms/api/khachhang/dms'
 const STORE_API_URL = 'https://jsk9x6z4-3000.asse.devtunnels.ms/api/cuahang'
+const DMS_NEARBY_RADIUS_METERS = 1000
 
 function getInAppBrowserName(userAgent) {
   const ua = String(userAgent || '').toLowerCase()
@@ -371,20 +371,76 @@ function findKvByNpp(npp) {
   )
 }
 
+function calculateDistanceMeters(lat1, lng1, lat2, lng2) {
+  const toRadians = (degrees) => (degrees * Math.PI) / 180
+  const earthRadius = 6371000
+  const dLat = toRadians(lat2 - lat1)
+  const dLng = toRadians(lng2 - lng1)
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return earthRadius * c
+}
+
+function parseLooseCoordinate(value, type) {
+  const direct = Number(value)
+  if (Number.isFinite(direct) && Math.abs(direct) <= 180) {
+    return direct
+  }
+
+  const text = String(value || '').trim()
+  if (!text) {
+    return null
+  }
+
+  const digits = text.replace(/\D/g, '')
+  if (!digits) {
+    return null
+  }
+
+  const integerDigits = type === 'lng' ? 3 : 2
+  if (digits.length <= integerDigits) {
+    return null
+  }
+
+  const normalizedText = `${digits.slice(0, integerDigits)}.${digits.slice(integerDigits)}`
+  const parsed = Number(normalizedText)
+  if (!Number.isFinite(parsed)) {
+    return null
+  }
+
+  if (type === 'lat') {
+    return Math.abs(parsed) <= 90 ? parsed : null
+  }
+
+  return Math.abs(parsed) <= 180 ? parsed : null
+}
+
 function normalizeDmsCustomers(rawValue) {
   const list = Array.isArray(rawValue) ? rawValue : Array.isArray(rawValue?.data) ? rawValue.data : []
   return list
     .map((item) => {
-      const lat = Number(item?.vi_do)
-      const lng = Number(item?.kinh_do)
+      const lat = parseLooseCoordinate(item?.vi_do, 'lat')
+      const lng = parseLooseCoordinate(item?.kinh_do, 'lng')
       // Map common DMS fields and normalize addresses/names
-      const storeName = item?.tenkh || item?.TenCH || item?.ten || item?.ten_ch || item?.name || ''
+      const storeName = item?.tenkh || item?.TenCH || item?.ten || item?.ten_ch || item?.name || item?.ma_kh || ''
       const address = item?.dia_chi || item?.DiaChi || item?.dc_giao_hangnh || item?.address || ''
       const ward = item?.phuong || item?.Phuong || ''
       const province = item?.tinh || item?.Tinh || ''
 
       return {
         ...item,
+        ma: item?.ma || item?.makh || item?.ma_kh || '',
+        ten: item?.ten || item?.tenkh || item?.TenCH || item?.name || item?.ma_kh || '',
+        loai: item?.loai || item?.loai_kh || '',
+        kenh: item?.kenh || item?.channel || '',
+        sdt: item?.sdt || item?.so_dien_thoai || item?.phone || '',
+        anh: item?.anh || item?.hinh_anh || '',
+        makh: item?.makh || item?.ma_kh || '',
+        tenkh: item?.tenkh || item?.ten || item?.TenCH || item?.ma_kh || '',
+        hinh_anh: item?.hinh_anh || item?.anh || '',
+        phong_ban_nv: item?.phong_ban_nv || item?.npp || item?.NPP || '',
         storeName,
         address,
         ward,
@@ -397,25 +453,32 @@ function normalizeDmsCustomers(rawValue) {
 }
 
 async function fetchDmsCustomersByNpp(nppName) {
-  if (!nppName) {
-    return []
-  }
-
-  const response = await fetch(DMS_CUSTOMER_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    body: JSON.stringify({ phong_ban_nv: nppName }),
+  const response = await fetch(`${import.meta.env.BASE_URL}khach-hang.js`, {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+    cache: 'no-store',
   })
 
   if (!response.ok) {
-    throw new Error('Không thể tải khách hàng DMS theo NPP.')
+    throw new Error('Không thể tải dữ liệu khách hàng từ khach-hang.js.')
   }
 
   const parsed = await response.json().catch(() => [])
-  return normalizeDmsCustomers(parsed)
+  const normalized = normalizeDmsCustomers(parsed)
+
+  if (!nppName) {
+    return normalized
+  }
+
+  const normalizedNpp = String(nppName).trim().toLowerCase()
+  const hasNppField = normalized.some((item) => String(item?.phong_ban_nv || '').trim() !== '')
+  if (!hasNppField) {
+    return normalized
+  }
+
+  return normalized.filter(
+    (item) => String(item?.phong_ban_nv || '').trim().toLowerCase() === normalizedNpp
+  )
 }
 
 function stripAdministrativePrefix(value) {
@@ -484,16 +547,11 @@ function escapeHtml(value) {
 
 function createDmsPopupContent(customer) {
   const fields = [
-    ['Mã quán', customer?.makh],
-    ['Tên quán', customer?.tenkh],
-    ['Trạng thái', customer?.trang_thai_kh],
-    ['Loại quán', customer?.loai_kh],
+    ['Mã', customer?.ma || customer?.makh],
+    ['Tên', customer?.ten || customer?.tenkh],
+    ['Loại', customer?.loai || customer?.loai_kh],
     ['Kênh', customer?.kenh],
-    ['Địa chỉ', customer?.dia_chi],
-    ['ĐC giao hàng', customer?.dc_giao_hangnh],
-    ['Liên hệ', customer?.nguoi_lien_he],
     ['SĐT', customer?.sdt],
-    ['Email', customer?.email],
   ]
 
   const metaRows = fields
@@ -501,8 +559,9 @@ function createDmsPopupContent(customer) {
     .map(([label, value]) => `<p><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</p>`)
     .join('')
 
-  const image = customer?.hinh_anh
-    ? `<img src="${escapeHtml(customer.hinh_anh)}" alt="${escapeHtml(customer.tenkh || 'Quán ăn DMS')}" class="map-popup-image" />`
+  const imageUrl = customer?.anh || customer?.hinh_anh
+  const image = imageUrl
+    ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(customer?.ten || customer?.tenkh || 'Quán ăn DMS')}" class="map-popup-image" />`
     : ''
 
   return `<div class="map-popup-content">${metaRows}${image}</div>`
@@ -998,8 +1057,20 @@ function App() {
       setLoadingDmsCustomers(true)
       try {
         const list = await fetchDmsCustomersByNpp(detectedNpp)
+        const nearbyList = list.filter((customer) => {
+          if (!locationData) {
+            return false
+          }
+          const distance = calculateDistanceMeters(
+            Number(locationData.lat),
+            Number(locationData.lng),
+            Number(customer.vi_do_num),
+            Number(customer.kinh_do_num)
+          )
+          return distance <= DMS_NEARBY_RADIUS_METERS
+        })
         if (!cancelled) {
-          setDmsCustomers(list)
+          setDmsCustomers(nearbyList)
         }
       } catch {
         if (!cancelled) {
