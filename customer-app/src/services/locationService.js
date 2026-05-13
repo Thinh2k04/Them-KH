@@ -51,8 +51,8 @@ function getCollectionStrategy(sampleCount) {
     networkInfo.effectiveType === '2g' ||
     (typeof networkInfo.rtt === 'number' && networkInfo.rtt >= 300)
 
-  const requestedSamples = Number.isFinite(sampleCount) ? Math.max(1, Math.floor(sampleCount)) : 2
-  const sampleTarget = slowNetwork ? 1 : Math.min(2, requestedSamples)
+  const requestedSamples = Number.isFinite(sampleCount) ? Math.max(1, Math.floor(sampleCount)) : 4
+  const sampleTarget = slowNetwork ? 1 : Math.min(5, requestedSamples)
 
   return {
     networkInfo,
@@ -69,6 +69,70 @@ function getCollectionStrategy(sampleCount) {
     overallTimeoutMs: slowNetwork
       ? Math.max(4000, Math.min(10000, sampleTarget * 3500))
       : Math.max(5000, Math.min(15000, sampleTarget * 4500)),
+  }
+}
+
+function pickReliableSamples(samples) {
+  if (!Array.isArray(samples) || samples.length <= 2) {
+    return samples || []
+  }
+
+  const byAccuracy = [...samples].sort((a, b) => a.accuracy - b.accuracy)
+  const baselineCount = Math.max(2, Math.ceil(byAccuracy.length * 0.6))
+  const baseline = byAccuracy.slice(0, baselineCount)
+  const center = baseline.reduce(
+    (acc, item) => {
+      acc.lat += item.lat
+      acc.lng += item.lng
+      return acc
+    },
+    { lat: 0, lng: 0 }
+  )
+  center.lat /= baseline.length
+  center.lng /= baseline.length
+
+  const bestAccuracy = baseline[0]?.accuracy || 20
+  const dynamicRadius = Math.max(12, Math.min(60, bestAccuracy * 2.2))
+
+  const filtered = samples.filter((item) => {
+    const drift = distanceInMeters({ lat: center.lat, lng: center.lng }, { lat: item.lat, lng: item.lng })
+    // Keep points if they are within dynamic cluster radius or have very strong accuracy.
+    return drift <= dynamicRadius || item.accuracy <= bestAccuracy * 1.4
+  })
+
+  return filtered.length >= 2 ? filtered : baseline
+}
+
+function computeWeightedCenter(samples) {
+  if (!samples.length) {
+    return {
+      lat: 0,
+      lng: 0,
+    }
+  }
+
+  const weighted = samples.reduce(
+    (acc, item) => {
+      const safeAccuracy = Math.max(1, Number(item.accuracy) || 50)
+      const weight = 1 / (safeAccuracy * safeAccuracy)
+      acc.lat += item.lat * weight
+      acc.lng += item.lng * weight
+      acc.weight += weight
+      return acc
+    },
+    { lat: 0, lng: 0, weight: 0 }
+  )
+
+  if (!weighted.weight) {
+    return {
+      lat: samples[0].lat,
+      lng: samples[0].lng,
+    }
+  }
+
+  return {
+    lat: weighted.lat / weighted.weight,
+    lng: weighted.lng / weighted.weight,
   }
 }
 
@@ -120,7 +184,7 @@ function getCurrentPositionStrict({ timeout = 15000, maximumAge = 0, enableHighA
   })
 }
 
-export async function collectVerifiedLocation(sampleCount = 3) {
+export async function collectVerifiedLocation(sampleCount = 4) {
   if (!navigator.geolocation) {
     throw new Error('Trình duyệt không hỗ trợ định vị GPS.')
   }
@@ -219,7 +283,7 @@ export async function collectVerifiedLocation(sampleCount = 3) {
       }
 
       collected.push(next)
-      if (collected.length >= sampleCount) {
+      if (collected.length >= strategy.sampleTarget) {
         window.clearTimeout(timer)
         finish(collected, false)
       }
@@ -252,31 +316,34 @@ export async function collectVerifiedLocation(sampleCount = 3) {
     )
   })
 
-  const denom = Math.max(1, samples.length)
-  const avgLat = samples.reduce((sum, item) => sum + item.lat, 0) / denom
-  const avgLng = samples.reduce((sum, item) => sum + item.lng, 0) / denom
-  const avgAccuracy = samples.reduce((sum, item) => sum + item.accuracy, 0) / denom
-  const minAccuracy = Math.min(...samples.map((x) => x.accuracy))
-  const maxAccuracy = Math.max(...samples.map((x) => x.accuracy))
+  const reliableSamples = pickReliableSamples(samples)
+  const center = computeWeightedCenter(reliableSamples)
+
+  const denom = Math.max(1, reliableSamples.length)
+  const avgLat = center.lat
+  const avgLng = center.lng
+  const avgAccuracy = reliableSamples.reduce((sum, item) => sum + item.accuracy, 0) / denom
+  const minAccuracy = Math.min(...reliableSamples.map((x) => x.accuracy))
+  const maxAccuracy = Math.max(...reliableSamples.map((x) => x.accuracy))
   const accuracySpread = maxAccuracy - minAccuracy
-  const maxSpread = samples.reduce((max, item) => {
+  const maxSpread = reliableSamples.reduce((max, item) => {
     const d = distanceInMeters({ lat: avgLat, lng: avgLng }, { lat: item.lat, lng: item.lng })
     return Math.max(max, d)
   }, 0)
 
-  const maxSpeedKmH = samples.reduce((max, item, index) => {
+  const maxSpeedKmH = reliableSamples.reduce((max, item, index) => {
     if (index === 0) {
       return max
     }
 
-    const prev = samples[index - 1]
+    const prev = reliableSamples[index - 1]
     const d = distanceInMeters({ lat: prev.lat, lng: prev.lng }, { lat: item.lat, lng: item.lng })
     const speed = computeSpeedKmH(d, item.timestamp - prev.timestamp)
     return Math.max(max, speed)
   }, 0)
 
   const now = Date.now()
-  const newestTimestamp = Math.max(...samples.map((x) => x.timestamp))
+  const newestTimestamp = Math.max(...reliableSamples.map((x) => x.timestamp))
   const ageMs = now - newestTimestamp
 
   const security = buildSecurityChecks({
@@ -303,6 +370,6 @@ export async function collectVerifiedLocation(sampleCount = 3) {
     timezone: security.timezone,
     networkInfo: security.networkInfo,
     webdriverFlag: security.webdriverFlag,
-    samples,
+    samples: reliableSamples,
   }
 }

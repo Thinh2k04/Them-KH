@@ -1192,7 +1192,7 @@ function App() {
         throw new Error('Quyền vị trí đang bị từ chối. Vui lòng cấp quyền để tiếp tục.')
       }
 
-      const verified = await collectVerifiedLocation(2)
+      const verified = await collectVerifiedLocation(4)
       setLocationData(verified)
 
       if (Number.isFinite(verified?.lat) && Number.isFinite(verified?.lng)) {
