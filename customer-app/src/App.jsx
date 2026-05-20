@@ -417,69 +417,6 @@ function parseLooseCoordinate(value, type) {
   return Math.abs(parsed) <= 180 ? parsed : null
 }
 
-function normalizeDmsCustomers(rawValue) {
-  const list = Array.isArray(rawValue) ? rawValue : Array.isArray(rawValue?.data) ? rawValue.data : []
-  return list
-    .map((item) => {
-      const lat = parseLooseCoordinate(item?.vi_do, 'lat')
-      const lng = parseLooseCoordinate(item?.kinh_do, 'lng')
-      // Map common DMS fields and normalize addresses/names
-      const storeName = item?.tenkh || item?.TenCH || item?.ten || item?.ten_ch || item?.name || item?.ma_kh || ''
-      const address = item?.dia_chi || item?.DiaChi || item?.dc_giao_hangnh || item?.address || ''
-      const ward = item?.phuong || item?.Phuong || ''
-      const province = item?.tinh || item?.Tinh || ''
-
-      return {
-        ...item,
-        ma: item?.ma || item?.makh || item?.ma_kh || '',
-        ten: item?.ten || item?.tenkh || item?.TenCH || item?.name || item?.ma_kh || '',
-        loai: item?.loai || item?.loai_kh || '',
-        kenh: item?.kenh || item?.channel || '',
-        sdt: item?.sdt || item?.so_dien_thoai || item?.phone || '',
-        anh: item?.anh || item?.hinh_anh || '',
-        makh: item?.makh || item?.ma_kh || '',
-        tenkh: item?.tenkh || item?.ten || item?.TenCH || item?.ma_kh || '',
-        hinh_anh: item?.hinh_anh || item?.anh || '',
-        phong_ban_nv: item?.phong_ban_nv || item?.npp || item?.NPP || '',
-        storeName,
-        address,
-        ward,
-        province,
-        vi_do_num: Number.isFinite(lat) ? lat : null,
-        kinh_do_num: Number.isFinite(lng) ? lng : null,
-      }
-    })
-    .filter((item) => item.vi_do_num !== null && item.kinh_do_num !== null)
-}
-
-async function fetchDmsCustomersByNpp(nppName) {
-  const response = await fetch(`${import.meta.env.BASE_URL}khach-hang.js`, {
-    method: 'GET',
-    headers: { Accept: 'application/json' },
-    cache: 'no-store',
-  })
-
-  if (!response.ok) {
-    throw new Error('Không thể tải dữ liệu khách hàng từ khach-hang.js.')
-  }
-
-  const parsed = await response.json().catch(() => [])
-  const normalized = normalizeDmsCustomers(parsed)
-
-  if (!nppName) {
-    return normalized
-  }
-
-  const normalizedNpp = String(nppName).trim().toLowerCase()
-  const hasNppField = normalized.some((item) => String(item?.phong_ban_nv || '').trim() !== '')
-  if (!hasNppField) {
-    return normalized
-  }
-
-  return normalized.filter(
-    (item) => String(item?.phong_ban_nv || '').trim().toLowerCase() === normalizedNpp
-  )
-}
 
 function stripAdministrativePrefix(value) {
   const normalized = String(value || '').trim()
@@ -1056,8 +993,22 @@ function App() {
 
       setLoadingDmsCustomers(true)
       try {
-        const list = await fetchDmsCustomersByNpp(detectedNpp)
-        const nearbyList = list.filter((customer) => {
+        const res = await fetch(`${import.meta.env.BASE_URL}khach-hang.js`)
+        const raw = await res.json()
+
+        const parsed = raw
+          .map((item) => {
+            const lat = parseLooseCoordinate(item?.vi_do, 'lat')
+            const lng = parseLooseCoordinate(item?.kinh_do, 'lng')
+            return {
+              ...item,
+              vi_do_num: Number.isFinite(lat) ? lat : null,
+              kinh_do_num: Number.isFinite(lng) ? lng : null,
+            }
+          })
+          .filter((item) => item.vi_do_num !== null && item.kinh_do_num !== null)
+
+        const nearbyList = parsed.filter((customer) => {
           if (!locationData) {
             return false
           }
