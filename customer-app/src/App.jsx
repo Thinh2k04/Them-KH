@@ -619,6 +619,7 @@ function App() {
   const miniMapInstanceRef = useRef(null)
   const miniMapLayersRef = useRef([])
   const miniMapClusterRef = useRef(null)
+  const miniMapBaseLayerRef = useRef(null)
   const expandedMapRef = useRef(null)
   const expandedMapInstanceRef = useRef(null)
   const expandedMapLayersRef = useRef([])
@@ -844,11 +845,13 @@ function App() {
         attributionControl: false,
       }).setView([locationData.lat, locationData.lng], 16)
 
-      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      const baseLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         attribution: 'Tiles &copy; Esri — Source: Esri, DigitalGlobe, Earthstar Geographics, USDA, USGS, AEX, Getmapping, Aerogrid, IGN, IGP, and the GIS User Community',
         maxZoom: 19,
         minZoom: 5,
       }).addTo(map)
+
+      miniMapBaseLayerRef.current = baseLayer
 
       L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png', {
         attribution: '',
@@ -857,7 +860,7 @@ function App() {
         opacity: 0.9,
         subdomains: 'abcd',
       }).addTo(map)
-    
+
       miniMapInstanceRef.current = map
     }
 
@@ -947,6 +950,46 @@ function App() {
     miniMapClusterRef.current = clusterGroup
 
     map.invalidateSize()
+
+    // extra invalidates to handle cases where container is animated/hidden at mount
+    setTimeout(() => map.invalidateSize(), 250)
+    requestAnimationFrame(() => requestAnimationFrame(() => map.invalidateSize()))
+
+    // keep map responsive on window resize
+    const resizeHandler = () => map.invalidateSize()
+    window.addEventListener('resize', resizeHandler)
+
+    // fallback to OSM if many tile errors (helps when provider blocks small tile requests)
+    let tileErrorCount = 0
+    const onTileError = () => {
+      tileErrorCount += 1
+      if (tileErrorCount === 1) {
+        setTimeout(() => map.invalidateSize(), 300)
+      }
+      if (tileErrorCount >= 6) {
+        try {
+          if (miniMapBaseLayerRef.current && map.hasLayer(miniMapBaseLayerRef.current)) {
+            map.removeLayer(miniMapBaseLayerRef.current)
+          }
+          const fallback = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors',
+            maxZoom: 19,
+            minZoom: 5,
+          }).addTo(map)
+          miniMapBaseLayerRef.current = fallback
+        } catch (e) {
+          // ignore
+        }
+      }
+    }
+    map.on('tileerror', onTileError)
+
+    return () => {
+      window.removeEventListener('resize', resizeHandler)
+      if (map && map.off) {
+        map.off('tileerror', onTileError)
+      }
+    }
   }, [locationData, nppAreasPrepared, dmsCustomers])
 
   useEffect(() => {
