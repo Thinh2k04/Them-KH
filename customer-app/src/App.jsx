@@ -35,7 +35,7 @@ function buildLocationRejectionInfo({
 }) {
   const normalizedMessage = String(message || '').trim()
   const rejection = {
-    title: 'Vị trí chưa đạt chuẩn',
+    title: 'Vị trí có thể không chính xác',
     message: normalizedMessage || 'Không thể lấy vị trí.',
     hints: [],
   }
@@ -80,7 +80,7 @@ function buildLocationRejectionInfo({
   }
 
   if (failedChecks.length > 0) {
-    rejection.title = 'Vị trí chưa đạt chuẩn chống fake'
+    rejection.title = 'Vị trí có thể không chính xác (phát hiện giả mạo)'
     rejection.message = `Các kiểm tra không đạt: ${failedChecks.join(', ')}.`
     rejection.hints = [
       'Đứng ở nơi thoáng để GPS ổn định hơn',
@@ -629,7 +629,7 @@ function App() {
     }
 
     if (!locationData.trusted) {
-      return { label: 'Vị trí chưa đạt chuẩn', tone: 'danger' }
+      return { label: 'Vị trí có thể không chính xác', tone: 'danger' }
     }
 
     if (detectedNpp && detectedKv) {
@@ -1242,7 +1242,7 @@ function App() {
           .map(([key]) => CHECK_LABELS[key])
           .filter(Boolean)
         const rejectionInfo = buildLocationRejectionInfo({
-          message: `Vị trí chưa đạt chuẩn. Kiểm tra thất bại: ${failedChecks.join(', ')}.`,
+          message: `Vị trí có thể không chính xác. Kiểm tra thất bại: ${failedChecks.join(', ')}.`,
           permissionState: resolvedPermissionState,
           secureContext: window.isSecureContext,
           failedChecks,
@@ -1274,7 +1274,7 @@ function App() {
 
   function handleSelectDmsStatus(nextStatus) {
     if (!locationData?.trusted) {
-      setError('Vị trí chưa đạt chuẩn chống fake. Vui lòng lấy lại vị trí.')
+      setError('Vị trí có thể không chính xác. Vui lòng lấy lại vị trí.')
       return
     }
     if (!detectedNpp || !detectedKv) {

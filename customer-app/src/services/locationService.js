@@ -77,12 +77,13 @@ function buildSecurityChecks(summary) {
   const networkInfo = getNetworkInfo()
 
   const checks = {
-    accuracyOk: Number.isFinite(summary.accuracy) && summary.accuracy > 1.5 && summary.accuracy <= 20,
-    spreadOk: Number.isFinite(summary.spread) && summary.spread <= 18,
-    freshOk: Number.isFinite(summary.ageMs) && summary.ageMs <= 12000,
-    speedOk: Number.isFinite(summary.maxSpeedKmH) && summary.maxSpeedKmH <= 150,
-    signalStableOk: Number.isFinite(summary.accuracySpread) && summary.accuracySpread <= 8,
-    sampleCountOk: Number.isFinite(summary.sampleCount) && summary.sampleCount >= 2,
+    // Loosened thresholds to accommodate devices with slightly worse GPS
+    accuracyOk: Number.isFinite(summary.accuracy) && summary.accuracy >= 1.5 && summary.accuracy <= 40,
+    spreadOk: Number.isFinite(summary.spread) && summary.spread <= 30,
+    freshOk: Number.isFinite(summary.ageMs) && summary.ageMs <= 30000,
+    speedOk: Number.isFinite(summary.maxSpeedKmH) && summary.maxSpeedKmH <= 200,
+    signalStableOk: Number.isFinite(summary.accuracySpread) && summary.accuracySpread <= 12,
+    sampleCountOk: Number.isFinite(summary.sampleCount) && summary.sampleCount >= 1,
     noMockedFlag: summary.mocked !== true,
     noAutomationFlag: !webdriverFlag,
     onlineOk: networkInfo.online !== false,
@@ -139,7 +140,8 @@ export async function collectVerifiedLocation(sampleCount = 4) {
   }
 
   const strategy = getLocationStrategy(sampleCount)
-  const sampleTarget = 2
+  // Allow a single good sample on less-capable devices
+  const sampleTarget = 1
   const samples = []
 
   try {
@@ -242,7 +244,7 @@ export async function collectVerifiedLocation(sampleCount = 4) {
     mocked: samples.some((item) => item.mocked),
   })
 
-  const trusted = Object.values(security.checks).every(Boolean) && samples.length >= 2
+  const trusted = Object.values(security.checks).every(Boolean) && samples.length >= sampleTarget
 
   if (!trusted) {
     const failedChecks = Object.entries(security.checks)
@@ -250,7 +252,7 @@ export async function collectVerifiedLocation(sampleCount = 4) {
       .map(([key]) => key)
       .join(', ')
 
-    throw new Error(`Vị trí chưa đạt chuẩn chống fake. Kiểm tra thất bại: ${failedChecks}.`)
+    throw new Error(`Vị trí có thể không chính xác. Kiểm tra thất bại: ${failedChecks}.`)
   }
 
   return {
