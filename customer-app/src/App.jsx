@@ -622,6 +622,7 @@ function App() {
   const expandedMapRef = useRef(null)
   const expandedMapInstanceRef = useRef(null)
   const expandedMapLayersRef = useRef([])
+  const cachedDmsRef = useRef(null)
 
   const locationBadge = useMemo(() => {
     if (!locationData) {
@@ -1062,33 +1063,56 @@ function App() {
 
       setLoadingDmsCustomers(true)
       try {
-        const res = await fetch(`${import.meta.env.BASE_URL}khach-hang.js`)
-        const raw = await res.json()
+        // Fetch and cache parsed DMS customers to avoid re-parsing on each location change
+        let parsed = cachedDmsRef.current
+        if (!parsed) {
+          const res = await fetch(`${import.meta.env.BASE_URL}khach-hang.js`)
+          const raw = await res.json()
 
-        const parsed = raw
-          .map((item) => {
-            const lat = parseLooseCoordinate(item?.vi_do, 'lat')
-            const lng = parseLooseCoordinate(item?.kinh_do, 'lng')
-            return {
-              ...item,
-              vi_do_num: Number.isFinite(lat) ? lat : null,
-              kinh_do_num: Number.isFinite(lng) ? lng : null,
-            }
-          })
-          .filter((item) => item.vi_do_num !== null && item.kinh_do_num !== null)
+          parsed = raw
+            .map((item) => {
+              const lat = parseLooseCoordinate(item?.vi_do, 'lat')
+              const lng = parseLooseCoordinate(item?.kinh_do, 'lng')
+              return {
+                ...item,
+                vi_do_num: Number.isFinite(lat) ? lat : null,
+                kinh_do_num: Number.isFinite(lng) ? lng : null,
+              }
+            })
+            .filter((item) => item.vi_do_num !== null && item.kinh_do_num !== null)
 
-        const nearbyList = parsed.filter((customer) => {
-          if (!locationData) {
-            return false
-          }
+          cachedDmsRef.current = parsed
+        }
+
+        if (!locationData) {
+          if (!cancelled) setDmsCustomers([])
+          return
+        }
+
+        // Quick bbox prefilter to avoid expensive distance calculations for all points
+        const lat = Number(locationData.lat)
+        const lng = Number(locationData.lng)
+        const latDelta = DMS_NEARBY_RADIUS_METERS / 111320 // approx meters per degree lat
+        const lngMetersPerDeg = Math.max(1e-6, 111320 * Math.cos((lat * Math.PI) / 180))
+        const lngDelta = DMS_NEARBY_RADIUS_METERS / lngMetersPerDeg
+
+        const bboxCandidates = parsed.filter((customer) => {
+          return (
+            Math.abs(customer.vi_do_num - lat) <= latDelta &&
+            Math.abs(customer.kinh_do_num - lng) <= lngDelta
+          )
+        })
+
+        const nearbyList = bboxCandidates.filter((customer) => {
           const distance = calculateDistanceMeters(
-            Number(locationData.lat),
-            Number(locationData.lng),
+            lat,
+            lng,
             Number(customer.vi_do_num),
             Number(customer.kinh_do_num)
           )
           return distance <= DMS_NEARBY_RADIUS_METERS
         })
+
         if (!cancelled) {
           setDmsCustomers(nearbyList)
         }
