@@ -77,12 +77,13 @@ function buildSecurityChecks(summary) {
   const networkInfo = getNetworkInfo()
 
   const checks = {
-    // Loosened thresholds to accommodate devices with slightly worse GPS
-    accuracyOk: Number.isFinite(summary.accuracy) && summary.accuracy >= 1.5 && summary.accuracy <= 40,
-    spreadOk: Number.isFinite(summary.spread) && summary.spread <= 30,
+    // Relaxed thresholds to allow modest GPS offsets (e.g. ~30m)
+    // Accept point accuracy up to 60m and spread/accuracySpread up to 40m
+    accuracyOk: Number.isFinite(summary.accuracy) && summary.accuracy >= 1.5 && summary.accuracy <= 60,
+    spreadOk: Number.isFinite(summary.spread) && summary.spread <= 40,
     freshOk: Number.isFinite(summary.ageMs) && summary.ageMs <= 30000,
     speedOk: Number.isFinite(summary.maxSpeedKmH) && summary.maxSpeedKmH <= 200,
-    signalStableOk: Number.isFinite(summary.accuracySpread) && summary.accuracySpread <= 12,
+    signalStableOk: Number.isFinite(summary.accuracySpread) && summary.accuracySpread <= 40,
     sampleCountOk: Number.isFinite(summary.sampleCount) && summary.sampleCount >= 1,
     noMockedFlag: summary.mocked !== true,
     noAutomationFlag: !webdriverFlag,
