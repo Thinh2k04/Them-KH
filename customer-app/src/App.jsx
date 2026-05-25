@@ -844,9 +844,9 @@ function App() {
         attributionControl: false,
       }).setView([locationData.lat, locationData.lng], 16)
 
-      L.tileLayer('http://www.google.cn/maps/vt?lyrs=s@189&gl=cn&x={x}&y={y}&z={z}', {
-        attribution: '',
-        maxZoom: 22,
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri — Source: Esri, DigitalGlobe, Earthstar Geographics, USDA, USGS, AEX, Getmapping, Aerogrid, IGN, IGP, and the GIS User Community',
+        maxZoom: 19,
         minZoom: 5,
       }).addTo(map)
 
@@ -965,9 +965,9 @@ function App() {
         attributionControl: false,
       }).setView([locationData.lat, locationData.lng], 15)
 
-      L.tileLayer('http://www.google.cn/maps/vt?lyrs=s@189&gl=cn&x={x}&y={y}&z={z}', {
-        attribution: '',
-        maxZoom: 22,
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri — Source: Esri, DigitalGlobe, Earthstar Geographics, USDA, USGS, AEX, Getmapping, Aerogrid, IGN, IGP, and the GIS User Community',
+        maxZoom: 19,
         minZoom: 5,
       }).addTo(map)
 
