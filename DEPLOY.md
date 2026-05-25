@@ -12,6 +12,9 @@ npm install
 ```bash
 npm run deploy
 ```
+ <!-- câu lệnh thêm khách hàng -->
+npm run sync-khach-hang
+
 
 **GHI CHÚ**: `gh-pages` package sẽ:
 - Build ứng dụng React

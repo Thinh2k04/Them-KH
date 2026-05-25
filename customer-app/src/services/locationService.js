@@ -1,23 +1,27 @@
-import { computeSpeedKmH, distanceInMeters } from '../utils/geo'
+import { distanceInMeters } from '../utils/geo'
 
 function normalizeGeoError(err) {
   if (!err) return new Error('Không thể lấy vị trí.')
+
   const code = err.code
   if (code === 1) {
     const error = new Error('Quyền vị trí đang bị từ chối. Bắt buộc cấp quyền vị trí để tiếp tục.')
     error.code = code
     return error
   }
+
   if (code === 2) {
     const error = new Error('Không thể xác định vị trí. Bắt buộc bật GPS hoặc dịch vụ vị trí trên thiết bị.')
     error.code = code
     return error
   }
+
   if (code === 3) {
     const error = new Error('Lấy vị trí bị quá thời gian. Vui lòng bật GPS và thử lại.')
     error.code = code
     return error
   }
+
   const error = new Error(err.message || 'Không thể lấy vị trí.')
   error.code = code
   return error
@@ -43,7 +47,7 @@ function getNetworkInfo() {
   }
 }
 
-function getCollectionStrategy(sampleCount) {
+function getLocationStrategy() {
   const networkInfo = getNetworkInfo()
   const slowNetwork =
     networkInfo.saveData === true ||
@@ -51,88 +55,19 @@ function getCollectionStrategy(sampleCount) {
     networkInfo.effectiveType === '2g' ||
     (typeof networkInfo.rtt === 'number' && networkInfo.rtt >= 300)
 
-  const requestedSamples = Number.isFinite(sampleCount) ? Math.max(1, Math.floor(sampleCount)) : 4
-  const sampleTarget = slowNetwork ? 1 : Math.min(5, requestedSamples)
-
   return {
     networkInfo,
     slowNetwork,
-    sampleTarget,
-    watchOptions: {
-      enableHighAccuracy: !slowNetwork,
-      maximumAge: slowNetwork ? 15000 : 5000,
+    primaryOptions: {
+      enableHighAccuracy: true,
+      timeout: slowNetwork ? 6000 : 4500,
+      maximumAge: 0,
     },
     fallbackOptions: {
-      timeout: slowNetwork ? 8000 : 12000,
-      maximumAge: slowNetwork ? 15000 : 5000,
+      enableHighAccuracy: false,
+      timeout: slowNetwork ? 7000 : 5500,
+      maximumAge: slowNetwork ? 15000 : 10000,
     },
-    overallTimeoutMs: slowNetwork
-      ? Math.max(4000, Math.min(10000, sampleTarget * 3500))
-      : Math.max(5000, Math.min(15000, sampleTarget * 4500)),
-  }
-}
-
-function pickReliableSamples(samples) {
-  if (!Array.isArray(samples) || samples.length <= 2) {
-    return samples || []
-  }
-
-  const byAccuracy = [...samples].sort((a, b) => a.accuracy - b.accuracy)
-  const baselineCount = Math.max(2, Math.ceil(byAccuracy.length * 0.6))
-  const baseline = byAccuracy.slice(0, baselineCount)
-  const center = baseline.reduce(
-    (acc, item) => {
-      acc.lat += item.lat
-      acc.lng += item.lng
-      return acc
-    },
-    { lat: 0, lng: 0 }
-  )
-  center.lat /= baseline.length
-  center.lng /= baseline.length
-
-  const bestAccuracy = baseline[0]?.accuracy || 20
-  const dynamicRadius = Math.max(12, Math.min(60, bestAccuracy * 2.2))
-
-  const filtered = samples.filter((item) => {
-    const drift = distanceInMeters({ lat: center.lat, lng: center.lng }, { lat: item.lat, lng: item.lng })
-    // Keep points if they are within dynamic cluster radius or have very strong accuracy.
-    return drift <= dynamicRadius || item.accuracy <= bestAccuracy * 1.4
-  })
-
-  return filtered.length >= 2 ? filtered : baseline
-}
-
-function computeWeightedCenter(samples) {
-  if (!samples.length) {
-    return {
-      lat: 0,
-      lng: 0,
-    }
-  }
-
-  const weighted = samples.reduce(
-    (acc, item) => {
-      const safeAccuracy = Math.max(1, Number(item.accuracy) || 50)
-      const weight = 1 / (safeAccuracy * safeAccuracy)
-      acc.lat += item.lat * weight
-      acc.lng += item.lng * weight
-      acc.weight += weight
-      return acc
-    },
-    { lat: 0, lng: 0, weight: 0 }
-  )
-
-  if (!weighted.weight) {
-    return {
-      lat: samples[0].lat,
-      lng: samples[0].lng,
-    }
-  }
-
-  return {
-    lat: weighted.lat / weighted.weight,
-    lng: weighted.lng / weighted.weight,
   }
 }
 
@@ -142,23 +77,27 @@ function buildSecurityChecks(summary) {
   const networkInfo = getNetworkInfo()
 
   const checks = {
-    accuracyOk: Number.isFinite(summary.avgAccuracy) && summary.avgAccuracy > 2 && summary.avgAccuracy <= 50,
-    spreadOk: Number.isFinite(summary.maxSpread) && summary.maxSpread <= 20,
-    freshOk: Number.isFinite(summary.ageMs) && summary.ageMs <= 20000,
+    accuracyOk: Number.isFinite(summary.accuracy) && summary.accuracy > 1 && summary.accuracy <= 20,
+    spreadOk: Number.isFinite(summary.spread) && summary.spread <= 18,
+    freshOk: Number.isFinite(summary.ageMs) && summary.ageMs <= 12000,
     speedOk: Number.isFinite(summary.maxSpeedKmH) && summary.maxSpeedKmH <= 150,
-    signalStableOk: Number.isFinite(summary.accuracySpread) && summary.accuracySpread <= 20,
+    signalStableOk: Number.isFinite(summary.accuracySpread) && summary.accuracySpread <= 8,
+    sampleCountOk: Number.isFinite(summary.sampleCount) && summary.sampleCount >= 2,
+    noMockedFlag: summary.mocked !== true,
     noAutomationFlag: !webdriverFlag,
     onlineOk: networkInfo.online !== false,
   }
 
   const trustScore =
-    (checks.accuracyOk ? 20 : 0) +
-    (checks.spreadOk ? 20 : 0) +
-    (checks.freshOk ? 15 : 0) +
-    (checks.speedOk ? 15 : 0) +
+    (checks.accuracyOk ? 30 : 0) +
+    (checks.spreadOk ? 25 : 0) +
+    (checks.freshOk ? 10 : 0) +
+    (checks.speedOk ? 5 : 0) +
     (checks.signalStableOk ? 10 : 0) +
-    (checks.noAutomationFlag ? 10 : 0) +
-    (checks.onlineOk ? 5 : 0)
+    (checks.sampleCountOk ? 10 : 0) +
+    (checks.noMockedFlag ? 7 : 0) +
+    (checks.noAutomationFlag ? 2 : 0) +
+    (checks.onlineOk ? 1 : 0)
 
   return {
     checks,
@@ -184,192 +123,152 @@ function getCurrentPositionStrict({ timeout = 15000, maximumAge = 0, enableHighA
   })
 }
 
+function normalizePosition(pos) {
+  return {
+    lat: pos.coords.latitude,
+    lng: pos.coords.longitude,
+    accuracy: pos.coords.accuracy,
+    mocked: pos.coords.mocked === true,
+    timestamp: pos.timestamp,
+  }
+}
+
 export async function collectVerifiedLocation(sampleCount = 4) {
   if (!navigator.geolocation) {
     throw new Error('Trình duyệt không hỗ trợ định vị GPS.')
   }
 
-  const strategy = getCollectionStrategy(sampleCount)
+  const strategy = getLocationStrategy(sampleCount)
+  const sampleTarget = 2
+  const samples = []
 
   try {
-    const fastFix = await getCurrentPositionStrict({
-      timeout: strategy.slowNetwork ? 2500 : 1800,
-      maximumAge: strategy.fallbackOptions.maximumAge,
-      enableHighAccuracy: !strategy.slowNetwork,
-    })
-
-    const quickSample = {
-      lat: fastFix.coords.latitude,
-      lng: fastFix.coords.longitude,
-      accuracy: fastFix.coords.accuracy,
-      timestamp: fastFix.timestamp,
+    const primaryFix = await getCurrentPositionStrict(strategy.primaryOptions)
+    samples.push(normalizePosition(primaryFix))
+  } catch (primaryErr) {
+    if (primaryErr?.code === 1) {
+      throw primaryErr
     }
-
-    if (strategy.sampleTarget === 1) {
-      const security = buildSecurityChecks({
-        avgAccuracy: quickSample.accuracy,
-        maxSpread: 0,
-        ageMs: 0,
-        maxSpeedKmH: 0,
-        accuracySpread: 0,
-      })
-
-      return {
-        lat: quickSample.lat,
-        lng: quickSample.lng,
-        accuracy: quickSample.accuracy,
-        minAccuracy: quickSample.accuracy,
-        maxAccuracy: quickSample.accuracy,
-        accuracySpread: 0,
-        spread: 0,
-        maxSpeedKmH: 0,
-        timestamp: quickSample.timestamp,
-        trustScore: security.trustScore,
-        trusted: Object.values(security.checks).every(Boolean),
-        checks: security.checks,
-        timezone: security.timezone,
-        networkInfo: security.networkInfo,
-        webdriverFlag: security.webdriverFlag,
-        samples: [quickSample],
-      }
-    }
-  } catch {
-    // Fall back to the multi-sample collector below.
   }
 
-  const samples = await new Promise((resolve, reject) => {
-    const collected = []
-    let settled = false
-    let watchId = null
+  if (!samples[0] || !Number.isFinite(samples[0].accuracy) || samples[0].accuracy > 60) {
+    try {
+      const fallbackFix = await getCurrentPositionStrict(strategy.fallbackOptions)
+      const normalizedFallback = normalizePosition(fallbackFix)
 
-    const finish = (value, isError) => {
-      if (settled) return
-      settled = true
-      window.clearTimeout(timer)
-      if (watchId !== null) {
-        navigator.geolocation.clearWatch(watchId)
+      if (!samples[0] || normalizedFallback.accuracy <= samples[0].accuracy) {
+        samples[0] = normalizedFallback
       }
-      if (isError) reject(value)
-      else resolve(value)
-    }
-
-    const overallTimeoutMs = strategy.overallTimeoutMs
-    const timer = window.setTimeout(() => {
-      // If we got at least 1 sample, use it instead of failing hard.
-      if (collected.length > 0) {
-        finish(collected, false)
-        return
-      }
-      finish(new Error('Lấy vị trí bị quá thời gian. Vui lòng thử lại.'), true)
-    }, overallTimeoutMs)
-
-    const pushSample = (pos) => {
-      const next = {
-        lat: pos.coords.latitude,
-        lng: pos.coords.longitude,
-        accuracy: pos.coords.accuracy,
-        timestamp: pos.timestamp,
-      }
-
-      // De-dup very similar consecutive updates.
-      const last = collected[collected.length - 1]
-      if (
-        last &&
-        Math.abs(last.lat - next.lat) < 0.0000001 &&
-        Math.abs(last.lng - next.lng) < 0.0000001 &&
-        Math.abs(last.accuracy - next.accuracy) < 0.5
-      ) {
-        return
-      }
-
-      collected.push(next)
-      if (collected.length >= strategy.sampleTarget) {
-        window.clearTimeout(timer)
-        finish(collected, false)
+    } catch (fallbackErr) {
+      if (!samples[0]) {
+        throw normalizeGeoError(fallbackErr)
       }
     }
+  }
 
-    // Warm start: allow a small cache window to get an instant fix, then watch refines accuracy.
-    watchId = navigator.geolocation.watchPosition(
-      (pos) => pushSample(pos),
-      () => {
-        window.clearTimeout(timer)
-        // Fallback to getCurrentPosition for browsers where watchPosition is flaky.
-        getCurrentPositionStrict({
-          timeout: strategy.fallbackOptions.timeout,
-          maximumAge: strategy.fallbackOptions.maximumAge,
-          enableHighAccuracy: !strategy.slowNetwork,
-        })
-          .then((pos) => finish([{
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            accuracy: pos.coords.accuracy,
-            timestamp: pos.timestamp,
-          }], false))
-          .catch((fallbackErr) => finish(normalizeGeoError(fallbackErr), true))
-          .finally(() => {})
-      },
-      {
+  if (!samples[0]) {
+    throw new Error('Không thể lấy vị trí.')
+  }
+
+  if (samples[0].mocked) {
+    throw new Error('Thiết bị đang trả về vị trí mô phỏng. Vui lòng tắt mock location rồi thử lại.')
+  }
+
+  while (samples.length < sampleTarget) {
+    try {
+      const nextFix = await getCurrentPositionStrict({
         enableHighAccuracy: true,
-        maximumAge: 5000,
+        timeout: strategy.slowNetwork ? 5500 : 3500,
+        maximumAge: 0,
+      })
+      const nextSample = normalizePosition(nextFix)
+
+      if (nextSample.mocked) {
+        throw new Error('Thiết bị đang trả về vị trí mô phỏng. Vui lòng tắt mock location rồi thử lại.')
       }
+
+      if (!samples[0] && nextSample.accuracy > 60) {
+        continue
+      }
+
+      samples.push(nextSample)
+    } catch (err) {
+      if (samples.length === 0) {
+        throw normalizeGeoError(err)
+      }
+      break
+    }
+  }
+
+  const bestSample = [...samples].sort((left, right) => left.accuracy - right.accuracy)[0]
+  const reference = bestSample || samples[0]
+  const current = reference
+
+  const maxSpread = samples.reduce((max, item) => {
+    const distance = distanceInMeters(
+      { lat: current.lat, lng: current.lng },
+      { lat: item.lat, lng: item.lng }
     )
-  })
-
-  const reliableSamples = pickReliableSamples(samples)
-  const center = computeWeightedCenter(reliableSamples)
-
-  const denom = Math.max(1, reliableSamples.length)
-  const avgLat = center.lat
-  const avgLng = center.lng
-  const avgAccuracy = reliableSamples.reduce((sum, item) => sum + item.accuracy, 0) / denom
-  const minAccuracy = Math.min(...reliableSamples.map((x) => x.accuracy))
-  const maxAccuracy = Math.max(...reliableSamples.map((x) => x.accuracy))
-  const accuracySpread = maxAccuracy - minAccuracy
-  const maxSpread = reliableSamples.reduce((max, item) => {
-    const d = distanceInMeters({ lat: avgLat, lng: avgLng }, { lat: item.lat, lng: item.lng })
-    return Math.max(max, d)
+    return Math.max(max, distance)
   }, 0)
 
-  const maxSpeedKmH = reliableSamples.reduce((max, item, index) => {
+  const minAccuracy = Math.min(...samples.map((item) => item.accuracy))
+  const maxAccuracy = Math.max(...samples.map((item) => item.accuracy))
+  const accuracySpread = maxAccuracy - minAccuracy
+
+  const maxSpeedKmH = samples.reduce((max, item, index) => {
     if (index === 0) {
       return max
     }
 
-    const prev = reliableSamples[index - 1]
-    const d = distanceInMeters({ lat: prev.lat, lng: prev.lng }, { lat: item.lat, lng: item.lng })
-    const speed = computeSpeedKmH(d, item.timestamp - prev.timestamp)
-    return Math.max(max, speed)
+    const prev = samples[index - 1]
+    const deltaMs = Math.max(1, item.timestamp - prev.timestamp)
+    const distanceMeters = distanceInMeters(
+      { lat: prev.lat, lng: prev.lng },
+      { lat: item.lat, lng: item.lng }
+    )
+    const speedKmH = (distanceMeters / deltaMs) * 3.6
+    return Math.max(max, speedKmH)
   }, 0)
 
   const now = Date.now()
-  const newestTimestamp = Math.max(...reliableSamples.map((x) => x.timestamp))
-  const ageMs = now - newestTimestamp
-
   const security = buildSecurityChecks({
-    avgAccuracy,
-    maxSpread,
-    ageMs,
+    accuracy: reference.accuracy,
+    ageMs: now - reference.timestamp,
+    spread: maxSpread,
     maxSpeedKmH,
     accuracySpread,
+    sampleCount: samples.length,
+    mocked: samples.some((item) => item.mocked),
   })
 
+  const trusted = Object.values(security.checks).every(Boolean) && samples.length >= 2
+
+  if (!trusted) {
+    const failedChecks = Object.entries(security.checks)
+      .filter(([, value]) => !value)
+      .map(([key]) => key)
+      .join(', ')
+
+    throw new Error(`Vị trí chưa đạt chuẩn chống fake. Kiểm tra thất bại: ${failedChecks}.`)
+  }
+
   return {
-    lat: avgLat,
-    lng: avgLng,
-    accuracy: avgAccuracy,
+    lat: reference.lat,
+    lng: reference.lng,
+    accuracy: reference.accuracy,
     minAccuracy,
     maxAccuracy,
     accuracySpread,
     spread: maxSpread,
     maxSpeedKmH,
-    timestamp: newestTimestamp,
+    timestamp: reference.timestamp,
     trustScore: security.trustScore,
-    trusted: Object.values(security.checks).every(Boolean),
+    trusted,
     checks: security.checks,
     timezone: security.timezone,
     networkInfo: security.networkInfo,
     webdriverFlag: security.webdriverFlag,
-    samples: reliableSamples,
+    samples,
   }
 }

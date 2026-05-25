@@ -26,6 +26,74 @@ const API_ORIGIN = new URL(CUSTOMER_API_URL).origin
 const STORE_API_URL = 'https://jsk9x6z4-3000.asse.devtunnels.ms/api/cuahang'
 const DMS_NEARBY_RADIUS_METERS = 1000
 
+function buildLocationRejectionInfo({
+  message = '',
+  code,
+  permissionState = 'prompt',
+  secureContext = true,
+  failedChecks = [],
+}) {
+  const normalizedMessage = String(message || '').trim()
+  const rejection = {
+    title: 'Vị trí chưa đạt chuẩn',
+    message: normalizedMessage || 'Không thể lấy vị trí.',
+    hints: [],
+  }
+
+  if (!secureContext) {
+    rejection.title = 'Trang chưa đủ điều kiện lấy vị trí'
+    rejection.message = 'Trang phải mở bằng HTTPS hoặc localhost. Nếu mở bằng file:// hoặc http://, trình duyệt sẽ chặn GPS.'
+    rejection.hints = ['Mở đúng link HTTPS/localhost', 'Không dùng file:// hoặc http://', 'Thử lại sau khi đổi đúng môi trường']
+    return rejection
+  }
+
+  if (permissionState === 'denied' || code === 1) {
+    rejection.title = 'Trình duyệt đã từ chối quyền vị trí'
+    rejection.message = 'Bạn đang chặn quyền Location/GPS trong trình duyệt, nên app không thể lấy vị trí.'
+    rejection.hints = [
+      'Bấm biểu tượng ổ khóa cạnh thanh địa chỉ',
+      'Đặt Location/GPS thành Allow',
+      'Nếu đang dùng điện thoại, kiểm tra cả quyền vị trí của hệ điều hành',
+    ]
+    return rejection
+  }
+
+  if (code === 2 || /GPS|dịch vụ vị trí|định vị/i.test(normalizedMessage)) {
+    rejection.title = 'Thiết bị chưa bật GPS'
+    rejection.message = 'Máy đang tắt dịch vụ vị trí hoặc GPS, nên không thể lấy tọa độ chính xác.'
+    rejection.hints = ['Bật GPS/dịch vụ vị trí trên máy', 'Ra nơi thoáng để bắt tín hiệu tốt hơn', 'Thử lại sau vài giây']
+    return rejection
+  }
+
+  if (code === 3 || /quá thời gian|timeout/i.test(normalizedMessage)) {
+    rejection.title = 'GPS bắt tín hiệu quá chậm'
+    rejection.message = 'Thiết bị chưa bắt được GPS đủ nhanh hoặc tín hiệu quá yếu.'
+    rejection.hints = ['Đứng gần cửa sổ hoặc ra ngoài trời', 'Tắt chế độ tiết kiệm pin cho GPS nếu có', 'Thử lại khi tín hiệu ổn định hơn']
+    return rejection
+  }
+
+  if (/mô phỏng|mock/i.test(normalizedMessage)) {
+    rejection.title = 'Thiết bị đang trả về vị trí mô phỏng'
+    rejection.message = 'App phát hiện mock location nên từ chối để chống fake.'
+    rejection.hints = ['Tắt mock location / vị trí giả', 'Gỡ app giả lập GPS nếu đang dùng', 'Thử lại bằng GPS thật của máy']
+    return rejection
+  }
+
+  if (failedChecks.length > 0) {
+    rejection.title = 'Vị trí chưa đạt chuẩn chống fake'
+    rejection.message = `Các kiểm tra không đạt: ${failedChecks.join(', ')}.`
+    rejection.hints = [
+      'Đứng ở nơi thoáng để GPS ổn định hơn',
+      'Không dùng app giả lập vị trí',
+      'Thử lại sau khi tín hiệu ổn định',
+    ]
+    return rejection
+  }
+
+  rejection.hints = ['Thử lại sau vài giây', 'Kiểm tra lại GPS và quyền vị trí', 'Đảm bảo đang ở môi trường thật, không phải vị trí mô phỏng']
+  return rejection
+}
+
 function getInAppBrowserName(userAgent) {
   const ua = String(userAgent || '').toLowerCase()
 
@@ -537,6 +605,7 @@ function App() {
   const [showExpandedMap, setShowExpandedMap] = useState(false)
   const [showLocationPrompt, setShowLocationPrompt] = useState(false)
   const [loadingLocation, setLoadingLocation] = useState(false)
+  const [locationRejectionInfo, setLocationRejectionInfo] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [loginError, setLoginError] = useState('')
@@ -1115,6 +1184,7 @@ function App() {
 
   function handleOpenLocationPrompt() {
     setError('')
+    setLocationRejectionInfo(null)
     setShowLocationPrompt(true)
   }
 
@@ -1122,6 +1192,9 @@ function App() {
     setShowLocationPrompt(false)
     setLoadingLocation(true)
     setDmsStatus(null)
+    setLocationRejectionInfo(null)
+
+    let resolvedPermissionState = 'prompt'
 
     try {
       if (miniMapInstanceRef.current) {
@@ -1134,12 +1207,14 @@ function App() {
         throw new Error('Ứng dụng cần chạy trên HTTPS hoặc localhost để lấy định vị chuẩn.')
       }
 
-      const permissionState = await navigator.permissions
+      const nextPermissionState = await navigator.permissions
         ?.query({ name: 'geolocation' })
         .then((result) => result.state)
         .catch(() => 'prompt')
 
-      if (permissionState === 'denied') {
+      resolvedPermissionState = nextPermissionState || 'prompt'
+
+      if (resolvedPermissionState === 'denied') {
         throw new Error('Quyền vị trí đang bị từ chối. Vui lòng cấp quyền để tiếp tục.')
       }
 
@@ -1166,15 +1241,28 @@ function App() {
           .filter(([, value]) => !value)
           .map(([key]) => CHECK_LABELS[key])
           .filter(Boolean)
+        const rejectionInfo = buildLocationRejectionInfo({
+          message: `Vị trí chưa đạt chuẩn. Kiểm tra thất bại: ${failedChecks.join(', ')}.`,
+          permissionState: resolvedPermissionState,
+          secureContext: window.isSecureContext,
+          failedChecks,
+        })
 
-        setError(
-          `Vị trí chưa đạt chuẩn. Kiểm tra thất bại: ${failedChecks.join(', ')}. Vui lòng thử lại ngoài trời.`
-        )
+        setLocationRejectionInfo(rejectionInfo)
+        setError(rejectionInfo.message)
+        setShowLocationPrompt(true)
       }
     } catch (err) {
       const message = err?.message || 'Không thể lấy vị trí. Vui lòng thử lại.'
       const blockingLocationError = err?.code === 1 || err?.code === 2 || /GPS|định vị|quyền vị trí/i.test(message)
+      const rejectionInfo = buildLocationRejectionInfo({
+        message,
+        code: err?.code,
+        permissionState: resolvedPermissionState,
+        secureContext: window.isSecureContext,
+      })
 
+      setLocationRejectionInfo(rejectionInfo)
       setError(message)
       if (blockingLocationError) {
         setShowLocationPrompt(true)
@@ -1899,6 +1987,28 @@ function App() {
               <h3>Bắt buộc bật GPS và cấp quyền vị trí.</h3>
               <p>Nếu không bật định vị, tính năng này sẽ không hoạt động.</p>
             </div>
+
+            {locationRejectionInfo ? (
+              <div className="card-block">
+                <div className="row-between">
+                  <h3>{locationRejectionInfo.title}</h3>
+                </div>
+                <p className="error">{locationRejectionInfo.message}</p>
+                {locationRejectionInfo.hints?.length ? (
+                  <div className="location-permission-list">
+                    {locationRejectionInfo.hints.map((hint) => (
+                      <div className="location-permission-item" key={hint}>
+                        <span className="location-permission-dot" />
+                        <div>
+                          <strong>Khắc phục</strong>
+                          <p>{hint}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             <div className="location-permission-list">
               <div className="location-permission-item">
