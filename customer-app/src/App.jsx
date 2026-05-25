@@ -623,6 +623,7 @@ function App() {
   const expandedMapInstanceRef = useRef(null)
   const expandedMapLayersRef = useRef([])
   const cachedDmsRef = useRef(null)
+  const gettingLocationRef = useRef(false)
 
   const locationBadge = useMemo(() => {
     if (!locationData) {
@@ -1207,12 +1208,20 @@ function App() {
   }
 
   function handleOpenLocationPrompt() {
+    if (gettingLocationRef.current || loadingLocation) {
+      return
+    }
+
     setError('')
     setLocationRejectionInfo(null)
     setShowLocationPrompt(true)
   }
 
   async function handleResolveLocation() {
+    if (gettingLocationRef.current || loadingLocation) {
+      return
+    }
+    gettingLocationRef.current = true
     setShowLocationPrompt(false)
     setLoadingLocation(true)
     setDmsStatus(null)
@@ -1293,6 +1302,7 @@ function App() {
       }
     } finally {
       setLoadingLocation(false)
+      gettingLocationRef.current = false
     }
   }
 
