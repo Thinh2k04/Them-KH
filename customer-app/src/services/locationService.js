@@ -83,7 +83,7 @@ function buildSecurityChecks(summary) {
     spreadOk: Number.isFinite(summary.spread) && summary.spread <= 40,
     freshOk: Number.isFinite(summary.ageMs) && summary.ageMs <= 30000,
     speedOk: Number.isFinite(summary.maxSpeedKmH) && summary.maxSpeedKmH <= 200,
-    signalStableOk: Number.isFinite(summary.accuracySpread) && summary.accuracySpread <= 40,
+    signalStableOk: Number.isFinite(summary.accuracySpread) && summary.accuracySpread <= 50,
     sampleCountOk: Number.isFinite(summary.sampleCount) && summary.sampleCount >= 1,
     noMockedFlag: summary.mocked !== true,
     noAutomationFlag: !webdriverFlag,
