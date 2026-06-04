@@ -1,0 +1,37 @@
+{
+  "id": "/Them-KH/",
+  "name": "Th\u00eam kh\u00e1ch h\u00e0ng m\u1edbi",
+  "short_name": "Th\u00eam KH",
+  "description": "\u1ee8ng d\u1ee5ng th\u00eam v\u00e0 qu\u1ea3n l\u00fd th\u00f4ng tin kh\u00e1ch h\u00e0ng.",
+  "start_url": "/Them-KH/?source=pwa",
+  "scope": "/Them-KH/",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone", "minimal-ui"],
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "prefer_related_applications": false,
+  "launch_handler": {
+    "client_mode": ["navigate-existing", "auto"]
+  },
+  "icons": [
+    {
+      "src": "/Them-KH/pwa-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/Them-KH/pwa-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/Them-KH/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

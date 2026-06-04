@@ -326,6 +326,84 @@ button:active {
   width: 100%;
 }
 
+.tracking-link-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 146px;
+  gap: 8px;
+  align-items: end;
+  margin: 10px 0;
+}
+
+.pwa-install-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  border-radius: 16px;
+  background: rgba(239, 246, 255, 0.92);
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.08);
+}
+
+.pwa-install-card strong {
+  display: block;
+  color: #1e3a8a;
+  font-size: 14px;
+}
+
+.pwa-install-card p {
+  margin: 4px 0 0;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.pwa-install-card .pwa-install-status {
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.install-app-btn {
+  flex: 0 0 auto;
+  background: #2563eb;
+  border-color: #1d4ed8;
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.22);
+}
+
+.tracking-link-row label {
+  min-width: 0;
+}
+
+.tracking-link-row input[readonly] {
+  cursor: default;
+}
+
+.tracking-actions {
+  display: grid;
+  grid-template-columns: 66px 72px;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.paste-link-btn,
+.fetch-location-btn {
+  width: 100%;
+  min-height: 46px;
+  padding-inline: 6px;
+  white-space: nowrap;
+}
+
+.fetch-location-btn {
+  font-size: 13px;
+}
+
+.location-extra-actions {
+  margin-top: 8px;
+}
+
 .status {
   display: inline-flex;
   align-items: center;
@@ -335,15 +413,6 @@ button:active {
   font-weight: 700;
   position: relative;
   overflow: hidden;
-}
-
-.status::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
-  transform: translateX(-120%);
-  animation: shine 3.4s ease-in-out infinite;
 }
 
 .status.neutral {
@@ -359,21 +428,6 @@ button:active {
 .status.danger {
   background: #ffe1e1;
   color: #991b1b;
-}
-
-.error {
-  position: relative;
-  overflow: hidden;
-  animation: alertPulse 1.8s ease-in-out infinite;
-}
-
-.error::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.65), transparent);
-  transform: translateX(-120%);
-  animation: alertSweep 2.8s ease-in-out infinite;
 }
 
 .meta-list {
@@ -834,47 +888,10 @@ button:active {
   }
 }
 
-@keyframes shine {
-  0% {
-    transform: translateX(-120%);
-  }
-  70% {
-    transform: translateX(120%);
-  }
-  100% {
-    transform: translateX(120%);
-  }
-}
-
-@keyframes alertPulse {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-1px);
-  }
-}
-
-@keyframes alertSweep {
-  0% {
-    transform: translateX(-120%);
-  }
-  60% {
-    transform: translateX(120%);
-  }
-  100% {
-    transform: translateX(120%);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .header-content,
   .brand-ticker-track,
-  .panel,
-  .status::after,
-  .error,
-  .error::before {
+  .panel {
     animation: none !important;
   }
 }
@@ -906,6 +923,14 @@ button:active {
 
   .row-buttons {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tracking-link-row {
+    grid-template-columns: minmax(0, 1fr) 218px;
+  }
+
+  .tracking-actions {
+    grid-template-columns: 104px 106px;
   }
 
   .list-actions {

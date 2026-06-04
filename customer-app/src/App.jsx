@@ -21,9 +21,9 @@ import 'leaflet.markercluster/dist/MarkerCluster.css'
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 import './App.css'
 
-const CUSTOMER_API_URL = 'https://jsk9x6z4-3000.asse.devtunnels.ms/api/khachhang/'
-const API_ORIGIN = new URL(CUSTOMER_API_URL).origin
-const STORE_API_URL = 'https://jsk9x6z4-3000.asse.devtunnels.ms/api/cuahang'
+const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN || 'https://jsk9x6z4-3000.asse.devtunnels.ms').replace(/\/$/, '')
+const CUSTOMER_API_URL = `${API_ORIGIN}/api/khachhang/`
+const STORE_API_URL = `${API_ORIGIN}/api/cuahang`
 const DMS_NEARBY_RADIUS_METERS = 1000
 
 function buildLocationRejectionInfo({
@@ -107,6 +107,30 @@ function getInAppBrowserName(userAgent) {
   if (ua.includes('wv') || ua.includes('webview')) return 'In-app browser'
 
   return ''
+}
+
+function isStandalonePWA() {
+  return window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true
+}
+
+function getPWAChecks({ installPrompt, serviceWorkerReady }) {
+  const isSecure = window.isSecureContext
+  const isStandalone = isStandalonePWA()
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent)
+  const isAndroid = /android/i.test(navigator.userAgent)
+  const isChrome = /chrome|crios/i.test(navigator.userAgent) && !/edg|opr|samsungbrowser/i.test(navigator.userAgent)
+  const isSafari = /safari/i.test(navigator.userAgent) && !/chrome|crios|android/i.test(navigator.userAgent)
+
+  return {
+    isSecure,
+    isStandalone,
+    isIOS,
+    isAndroid,
+    isChrome,
+    isSafari,
+    canPromptInstall: Boolean(installPrompt),
+    serviceWorkerReady,
+  }
 }
 
 function normalizeNganhHang(value) {
@@ -485,6 +509,12 @@ function parseLooseCoordinate(value, type) {
   return Math.abs(parsed) <= 180 ? parsed : null
 }
 
+function extractTrackingLink(value) {
+  const text = String(value || '').trim()
+  const matched = text.match(/https:\/\/h5\.timemark\.com\/s\/[A-Za-z0-9]+\/\d+/i)
+  return matched?.[0] || ''
+}
+
 
 function stripAdministrativePrefix(value) {
   const normalized = String(value || '').trim()
@@ -606,10 +636,15 @@ function App() {
   const [showLocationPrompt, setShowLocationPrompt] = useState(false)
   const [loadingLocation, setLoadingLocation] = useState(false)
   const [locationRejectionInfo, setLocationRejectionInfo] = useState(null)
+  const [trackingLink, setTrackingLink] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [loginError, setLoginError] = useState('')
-  const [blockedBrowserName] = useState(() => getInAppBrowserName(navigator.userAgent))
+  const [blockedBrowserName] = useState(() => (isStandalonePWA() ? '' : getInAppBrowserName(navigator.userAgent)))
+  const [installPrompt, setInstallPrompt] = useState(null)
+  const [isAppInstalled, setIsAppInstalled] = useState(() => isStandalonePWA())
+  const [installMessage, setInstallMessage] = useState('')
+  const [serviceWorkerReady, setServiceWorkerReady] = useState(() => Boolean(navigator.serviceWorker?.controller))
   const [showStoreList, setShowStoreList] = useState(false)
   const [searchCustomer, setSearchCustomer] = useState('')
   const [searchStore, setSearchStore] = useState('')
@@ -701,6 +736,92 @@ function App() {
       return tenCH.includes(lowerSearch) || diaChi.includes(lowerSearch) || npp.includes(lowerSearch)
     })
   }, [visibleStores, searchStore])
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (event) => {
+      event.preventDefault()
+      setInstallPrompt(event)
+      setInstallMessage('')
+    }
+
+    const handleAppInstalled = () => {
+      setInstallPrompt(null)
+      setIsAppInstalled(true)
+      setInstallMessage('App đã được cài vào máy.')
+    }
+
+    const handlePWAStatusChange = (event) => {
+      if (typeof event.detail?.serviceWorkerReady === 'boolean') {
+        setServiceWorkerReady(event.detail.serviceWorkerReady)
+      }
+    }
+
+    const handleControllerChange = () => {
+      setServiceWorkerReady(true)
+    }
+
+    const handleDisplayModeChange = () => {
+      setIsAppInstalled(isStandalonePWA())
+    }
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+    window.addEventListener('appinstalled', handleAppInstalled)
+    window.addEventListener('pwa-status-change', handlePWAStatusChange)
+    navigator.serviceWorker?.addEventListener?.('controllerchange', handleControllerChange)
+
+    const standaloneQuery = window.matchMedia?.('(display-mode: standalone)')
+    standaloneQuery?.addEventListener?.('change', handleDisplayModeChange)
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+      window.removeEventListener('appinstalled', handleAppInstalled)
+      window.removeEventListener('pwa-status-change', handlePWAStatusChange)
+      navigator.serviceWorker?.removeEventListener?.('controllerchange', handleControllerChange)
+      standaloneQuery?.removeEventListener?.('change', handleDisplayModeChange)
+    }
+  }, [])
+
+  async function handleInstallPWA() {
+    const pwaChecks = getPWAChecks({ installPrompt, serviceWorkerReady })
+
+    if (isStandalonePWA()) {
+      setIsAppInstalled(true)
+      setInstallMessage('App đã chạy ở chế độ cài đặt.')
+      return
+    }
+
+    if (!pwaChecks.isSecure) {
+      setInstallMessage('Chưa thể cài: hãy mở bằng link HTTPS đã deploy, không dùng http/IP local.')
+      return
+    }
+
+    if (!installPrompt) {
+      if (pwaChecks.isIOS) {
+        setInstallMessage('iPhone: chỉ Safari cài được. Mở bằng Safari, bấm Chia sẻ, chọn Thêm vào màn hình chính.')
+        return
+      }
+
+      if (!pwaChecks.serviceWorkerReady) {
+        setInstallMessage('Đang chuẩn bị chế độ cài app. Vui lòng tải lại trang sau vài giây rồi bấm Cài app.')
+        return
+      }
+
+      setInstallMessage('Android: mở bằng Chrome, bấm menu, chọn Cài đặt ứng dụng. Không dùng Zalo/Facebook/Messenger.')
+      return
+    }
+
+    const promptEvent = installPrompt
+    setInstallPrompt(null)
+    await promptEvent.prompt()
+    const choice = await promptEvent.userChoice
+
+    if (choice.outcome === 'accepted') {
+      setIsAppInstalled(true)
+      setInstallMessage('Đang cài app vào máy.')
+    } else {
+      setInstallMessage('Bạn đã hủy cài app.')
+    }
+  }
 
   async function loadCustomers({ showError = true } = {}) {
     setLoadingCustomers(true)
@@ -977,7 +1098,7 @@ function App() {
             minZoom: 5,
           }).addTo(map)
           miniMapBaseLayerRef.current = fallback
-        } catch (e) {
+        } catch {
           // ignore
         }
       }
@@ -1257,7 +1378,23 @@ function App() {
 
     setError('')
     setLocationRejectionInfo(null)
-    setShowLocationPrompt(true)
+    void handleResolveLocation()
+  }
+
+  async function handlePasteTrackingLink() {
+    setError('')
+
+    try {
+      const clipboardText = await navigator.clipboard.readText()
+      const nextLink = extractTrackingLink(clipboardText)
+      if (!nextLink) {
+        setError('Clipboard không có link định vị Timemark hợp lệ để dán.')
+        return
+      }
+      setTrackingLink(nextLink)
+    } catch {
+      setError('Không thể đọc clipboard. Vui lòng bấm nút Dán lại sau khi copy link định vị.')
+    }
   }
 
   async function handleResolveLocation() {
@@ -1270,8 +1407,6 @@ function App() {
     setDmsStatus(null)
     setLocationRejectionInfo(null)
 
-    let resolvedPermissionState = 'prompt'
-
     try {
       if (miniMapInstanceRef.current) {
         miniMapInstanceRef.current.remove()
@@ -1279,22 +1414,7 @@ function App() {
         miniMapLayersRef.current = []
       }
 
-      if (!window.isSecureContext) {
-        throw new Error('Ứng dụng cần chạy trên HTTPS hoặc localhost để lấy định vị chuẩn.')
-      }
-
-      const nextPermissionState = await navigator.permissions
-        ?.query({ name: 'geolocation' })
-        .then((result) => result.state)
-        .catch(() => 'prompt')
-
-      resolvedPermissionState = nextPermissionState || 'prompt'
-
-      if (resolvedPermissionState === 'denied') {
-        throw new Error('Quyền vị trí đang bị từ chối. Vui lòng cấp quyền để tiếp tục.')
-      }
-
-      const verified = await collectVerifiedLocation(4)
+      const verified = await collectVerifiedLocation(trackingLink)
       setLocationData(verified)
 
       if (Number.isFinite(verified?.lat) && Number.isFinite(verified?.lng)) {
@@ -1319,7 +1439,7 @@ function App() {
           .filter(Boolean)
         const rejectionInfo = buildLocationRejectionInfo({
           message: `Vị trí có thể không chính xác. Kiểm tra thất bại: ${failedChecks.join(', ')}.`,
-          permissionState: resolvedPermissionState,
+          permissionState: 'granted',
           secureContext: window.isSecureContext,
           failedChecks,
         })
@@ -1330,19 +1450,15 @@ function App() {
       }
     } catch (err) {
       const message = err?.message || 'Không thể lấy vị trí. Vui lòng thử lại.'
-      const blockingLocationError = err?.code === 1 || err?.code === 2 || /GPS|định vị|quyền vị trí/i.test(message)
       const rejectionInfo = buildLocationRejectionInfo({
         message,
         code: err?.code,
-        permissionState: resolvedPermissionState,
+        permissionState: 'granted',
         secureContext: window.isSecureContext,
       })
 
       setLocationRejectionInfo(rejectionInfo)
       setError(message)
-      if (blockingLocationError) {
-        setShowLocationPrompt(true)
-      }
     } finally {
       setLoadingLocation(false)
       gettingLocationRef.current = false
@@ -1411,6 +1527,7 @@ function App() {
     setDetectedKv('')
     setDmsCustomers([])
     setDmsStatus(null)
+    setTrackingLink('')
     setShowExpandedMap(false)
     setPhotoFile(null)
     setPhotoDataUrl('')
@@ -1567,6 +1684,21 @@ function App() {
     }
   }
 
+  const installPanel = !isAppInstalled ? (
+    <div className="pwa-install-card">
+      <div>
+        <strong>Cài app vào máy</strong>
+        {installMessage ? <p>{installMessage}</p> : <p>Bấm cài để mở app từ màn hình chính và không hiện thanh URL.</p>}
+        <p className="pwa-install-status">
+          HTTPS: {window.isSecureContext ? 'OK' : 'Chưa OK'} · SW: {serviceWorkerReady ? 'OK' : 'Đang bật'} · Prompt: {installPrompt ? 'OK' : 'Chưa có'}
+        </p>
+      </div>
+      <button type="button" className="install-app-btn" onClick={handleInstallPWA}>
+        Cài app
+      </button>
+    </div>
+  ) : null
+
   if (blockedBrowserName) {
     return (
       <main className="page browser-gate">
@@ -1595,7 +1727,7 @@ function App() {
               type="button"
               onClick={() => {
                 // Best-effort: some apps will offer "Open in browser" after opening a new tab
-                window.open(window.location.href, '_blank', 'noopener,noreferrer')
+                alert('Vui lòng copy link và mở trực tiếp trong Safari/Chrome.')
               }}
             >
               Thử mở tab mới
@@ -1616,6 +1748,7 @@ function App() {
         <section className="panel login-panel">
           <h2>Đăng nhập</h2>
           <p className="hint">Nhập mã quản trị để vào hệ thống thêm khách hàng.</p>
+          {installPanel}
           <form onSubmit={handleLoginSubmit} className="login-form">
             <label>
               Mã đăng nhập
@@ -1637,12 +1770,6 @@ function App() {
   return (
     <main className="page">
       <header className="page-header">
-        <div className="brand-ticker" aria-hidden="true">
-          <div className="brand-ticker-track">
-            <span>Ăn Cùng Bà Tuyết • Thêm khách hàng mới • Lấy vị trí chuẩn • Chụp ảnh thực tế  </span>
-            <span>Ăn Cùng Bà Tuyết • Thêm khách hàng mới • Lấy vị trí chuẩn • Chụp ảnh thực tế  </span>
-          </div>
-        </div>
         <div className="header-content">
           <img src="https://res.cloudinary.com/dvg7ourbo/image/upload/v1766046738/logo22px_re6vqu.png" alt="Thêm khách hàng mới" className="logo" />
           <div>
@@ -1651,6 +1778,7 @@ function App() {
             <p className="subtitle">Lấy vị trí GPS, chụp ảnh thực tế, và lưu thông tin khách hàng của bạn.</p>
             <p className="subtitle">Đăng nhập: <strong>{currentUser}</strong>{currentUserCode ? ` (${currentUserCode})` : ''}</p>
           </div>
+          {installPanel}
         </div>
         {/* <button type="button" className="ghost" onClick={handleLogout}>Đăng xuất</button> */}
       </header>
@@ -1664,27 +1792,50 @@ function App() {
               <h3>Xác nhận trạng thái khách hàng trên DMS</h3>
               <span className={`status ${locationBadge.tone}`}>{locationBadge.label}</span>
             </div>
-            <div className="row-buttons">
-              <button type="button" onClick={handleOpenLocationPrompt} disabled={loadingLocation}>
-                {loadingLocation
-                  ? 'Đang lấy vị trí...'
-                  : locationData
-                    ? 'Lấy lại vị trí'
-                    : 'Lấy vị trí chuẩn'}
-              </button>
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => setShowExpandedMap(true)}
-                disabled={!locationData}
-              >
-                Xem bản đồ lớn
-              </button>
+            <div className="tracking-link-row">
+              <label>
+                Link định vị
+                <input
+                  type="url"
+                  value={trackingLink}
+                  readOnly
+                  placeholder="Bấm Dán"
+                  inputMode="url"
+                  autoComplete="off"
+                />
+              </label>
+              <div className="tracking-actions">
+                <button type="button" className="ghost paste-link-btn" onClick={handlePasteTrackingLink}>
+                  Dán
+                </button>
+                <button
+                  type="button"
+                  className="fetch-location-btn"
+                  onClick={handleOpenLocationPrompt}
+                  disabled={loadingLocation}
+                >
+                  {loadingLocation ? 'Đang...' : locationData ? 'Lấy lại' : 'Lấy vị trí'}
+                </button>
+              </div>
             </div>
+            {locationData ? (
+              <div className="row-buttons location-extra-actions">
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => setShowExpandedMap(true)}
+                >
+                  Xem bản đồ lớn
+                </button>
+              </div>
+            ) : null}
             {locationData && detectedNpp && detectedKv && (
               <ul className="meta-list">
                 <li>Vĩ độ: {locationData.lat.toFixed(8)}</li>
                 <li>Kinh độ: {locationData.lng.toFixed(8)}</li>
+                {locationData.capturedDate && locationData.capturedTime ? (
+                  <li>Thời gian định vị: {locationData.capturedTime} {locationData.capturedDate}</li>
+                ) : null}
               </ul>
             )}
 
@@ -1703,28 +1854,28 @@ function App() {
               </div>
             ) : null}
 
-            <div className="row-buttons" style={{ marginTop: 10 }}>
-              <button
-                type="button"
-                className={dmsStatus === 'noDms' ? 'active-choice' : ''}
-                onClick={() => handleSelectDmsStatus('noDms')}
-                disabled={!locationData?.trusted || !detectedNpp || !detectedKv}
-              >
-                {dmsStatus === 'noDms'
-                  ? 'Đã chọn khách hàng chưa có trên DMS'
-                  : 'Khách hàng chưa có trên DMS'}
-              </button>
-              <button
-                type="button"
-                className={`${dmsStatus === 'hasDms' ? 'active-choice' : ''} ghost`.trim()}
-                onClick={() => handleSelectDmsStatus('hasDms')}
-                disabled={!locationData?.trusted || !detectedNpp || !detectedKv}
-              >
-                {dmsStatus === 'hasDms'
-                  ? 'Đã chọn khách hàng đã có trên DMS'
-                  : 'Khách hàng đã có trên DMS'}
-              </button>
-            </div>
+            {locationData?.trusted && detectedNpp && detectedKv ? (
+              <div className="row-buttons dms-choice-actions" style={{ marginTop: 10 }}>
+                <button
+                  type="button"
+                  className={dmsStatus === 'noDms' ? 'active-choice' : ''}
+                  onClick={() => handleSelectDmsStatus('noDms')}
+                >
+                  {dmsStatus === 'noDms'
+                    ? 'Đã chọn khách hàng chưa có trên DMS'
+                    : 'Khách hàng chưa có trên DMS'}
+                </button>
+                <button
+                  type="button"
+                  className={`${dmsStatus === 'hasDms' ? 'active-choice' : ''} ghost`.trim()}
+                  onClick={() => handleSelectDmsStatus('hasDms')}
+                >
+                  {dmsStatus === 'hasDms'
+                    ? 'Đã chọn khách hàng đã có trên DMS'
+                    : 'Khách hàng đã có trên DMS'}
+                </button>
+              </div>
+            ) : null}
           </div>
 
           {dmsStatus === null ? (
@@ -1941,14 +2092,16 @@ function App() {
 
           {error ? <p className="error">{error}</p> : null}
 
-          <div className="row-buttons action-bar">
-            <button type="submit" disabled={submitting}>
-              {submitting ? 'Đang lưu...' : dmsStatus === 'hasDms' ? 'Lưu cửa hàng' : 'Lưu khách hàng'}
-            </button>
-            <button type="button" className="ghost" onClick={resetForm}>
-              Làm mới
-            </button>
-          </div>
+          {dmsStatus !== null ? (
+            <div className="row-buttons action-bar">
+              <button type="submit" disabled={submitting}>
+                {submitting ? 'Đang lưu...' : dmsStatus === 'hasDms' ? 'Lưu cửa hàng' : 'Lưu khách hàng'}
+              </button>
+              <button type="button" className="ghost" onClick={resetForm}>
+                Làm mới
+              </button>
+            </div>
+          ) : null}
         </form>
 
         <aside className="panel list-panel">
