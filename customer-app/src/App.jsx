@@ -1998,8 +1998,6 @@ function App() {
                 {locationData.capturedDate && locationData.capturedTime ? (
                   <li>Thời gian định vị: {locationData.capturedTime} {locationData.capturedDate}</li>
                 ) : null}
-                <li>Độ chính xác: {formatMetric(locationData.accuracy, 'm')}</li>
-                <li>Số mẫu GPS: {Number.isFinite(locationData.sampleCount) ? locationData.sampleCount : locationData.samples?.length || 1}</li>
               </ul>
             ) : null}
 

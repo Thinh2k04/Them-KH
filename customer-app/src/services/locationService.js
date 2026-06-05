@@ -94,6 +94,9 @@ function summarizeGpsSamples(samples) {
     .map(normalizePosition)
     .filter(Boolean)
     .filter((sample) => Number.isFinite(sample.accuracy))
+    .filter((sample, index, allSamples) =>
+      allSamples.findIndex((item) => item.timestamp === sample.timestamp) === index
+    )
 
   if (validSamples.length === 0) {
     throw new Error('Không lấy được mẫu GPS hợp lệ. Vui lòng bật GPS và thử lại.')
@@ -157,6 +160,21 @@ export async function collectGpsLocation() {
   }
 
   const samples = []
+
+  await new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        samples.push(position)
+        resolve()
+      },
+      () => resolve(),
+      {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 3500,
+      }
+    )
+  })
 
   await new Promise((resolve, reject) => {
     let settled = false
