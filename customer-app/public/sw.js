@@ -1,11 +1,11 @@
-const CACHE_NAME = 'them-kh-pwa-v4'
+const CACHE_NAME = 'them-kh-pwa-v5'
 const BASE_PATH = new URL(self.registration.scope).pathname
 const IS_LOCALHOST = ['localhost', '127.0.0.1', '[::1]'].includes(self.location.hostname)
 const withBasePath = (path) => new URL(path, self.registration.scope).pathname
 const APP_SHELL = [
   BASE_PATH,
   withBasePath('index.html'),
-  withBasePath('favicon.svg'),
+  withBasePath('logo22px_re6vqu.png'),
   withBasePath('pwa-icon-192.png'),
   withBasePath('pwa-icon-512.png'),
   withBasePath('manifest.webmanifest'),
