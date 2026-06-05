@@ -516,7 +516,7 @@ function parseLooseCoordinate(value, type) {
 
 function extractTrackingLink(value) {
   const text = String(value || '').trim()
-  const matched = text.match(/https:\/\/h5\.timemark\.com\/s\/[A-Za-z0-9]+\/\d+/i)
+  const matched = text.match(/https:\/\/h5\.timemark\.com\/s\/[A-Za-z0-9_-]+\/\d+(?:[^\s]*)?/i)
   return matched?.[0] || ''
 }
 
@@ -1395,8 +1395,24 @@ function App() {
     void handleResolveLocation()
   }
 
+  function resetTrackingResult() {
+    setLocationData(null)
+    setDetectedNpp('')
+    setDetectedKv('')
+    setDmsCustomers([])
+    setDmsStatus(null)
+    setShowExpandedMap(false)
+    setLocationRejectionInfo(null)
+  }
+
+  function applyTrackingLink(nextLink) {
+    setTrackingLink(nextLink)
+    resetTrackingResult()
+  }
+
   async function handlePasteTrackingLink() {
     setError('')
+    applyTrackingLink('')
 
     try {
       const clipboardText = await navigator.clipboard.readText()
@@ -1405,10 +1421,28 @@ function App() {
         setError('Clipboard không có link định vị Timemark hợp lệ để dán.')
         return
       }
-      setTrackingLink(nextLink)
+      applyTrackingLink(nextLink)
     } catch {
       setError('Không thể đọc clipboard. Vui lòng bấm nút Dán lại sau khi copy link định vị.')
     }
+  }
+
+  function handleTrackingLinkChange(event) {
+    applyTrackingLink(event.target.value)
+    setError('')
+  }
+
+  function handleTrackingLinkPaste(event) {
+    const pastedText = event.clipboardData?.getData('text') || ''
+    const nextLink = extractTrackingLink(pastedText)
+
+    if (!nextLink) {
+      return
+    }
+
+    event.preventDefault()
+    setError('')
+    applyTrackingLink(nextLink)
   }
 
   async function handleResolveLocation() {
@@ -1812,7 +1846,8 @@ function App() {
                 <input
                   type="url"
                   value={trackingLink}
-                  readOnly
+                  onChange={handleTrackingLinkChange}
+                  onPaste={handleTrackingLinkPaste}
                   placeholder="Bấm Dán"
                   inputMode="url"
                   autoComplete="off"
