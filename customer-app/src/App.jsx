@@ -1946,7 +1946,7 @@ function App() {
                   onClick={handleOpenGpsPrompt}
                   disabled={loadingLocation}
                 >
-                  {loadingLocation ? 'Đang...' : 'GPS chuẩn'}
+                  {loadingLocation ? 'Đang...' : 'GPS Máy'}
                 </button>
               </div>
             </div>
