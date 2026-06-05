@@ -1,7 +1,7 @@
 const TRACKING_SCRAPE_API_URL = 'https://jsk9x6z4-3000.asse.devtunnels.ms/api/tracking/scrape'
 const MAX_TRACKING_AGE_MS = 5 * 60 * 1000
 const GPS_SAMPLE_TARGET = 8
-const GPS_MIN_SAMPLE_COUNT = 3
+const GPS_MIN_SAMPLE_COUNT = 2
 const GPS_MAX_WAIT_MS = 15000
 const GPS_FAST_ACCEPT_ACCURACY_METERS = 15
 const GPS_UNUSABLE_ACCURACY_METERS = 1000
@@ -249,11 +249,11 @@ export async function collectGpsLocation() {
   }
 
   const checks = {
-    accuracyOk: Number.isFinite(summary.accuracy) && summary.accuracy >= 1.5 && summary.accuracy <= 60,
-    spreadOk: Number.isFinite(summary.spread) && summary.spread <= 40,
+    accuracyOk: Number.isFinite(summary.accuracy) && summary.accuracy >= 1.5 && summary.accuracy <= 120,
+    spreadOk: Number.isFinite(summary.spread) && summary.spread <= 120,
     freshOk: Number.isFinite(summary.ageMs) && summary.ageMs <= 30000,
     speedOk: Number.isFinite(summary.maxSpeedKmH) && summary.maxSpeedKmH <= 200,
-    signalStableOk: Number.isFinite(summary.accuracySpread) && summary.accuracySpread <= 50,
+    signalStableOk: Number.isFinite(summary.accuracySpread) && summary.accuracySpread <= 100,
     sampleCountOk: Number.isFinite(summary.sampleCount) && summary.sampleCount >= GPS_MIN_SAMPLE_COUNT,
     noMockedFlag: summary.mocked !== true,
     noAutomationFlag: !webdriverFlag,
