@@ -110,7 +110,7 @@ export const CHECK_LABELS = {
   freshOk: 'Dữ liệu GPS cũ quá 30 giây',
   speedOk: 'Tốc độ di chuyển bất thường',
   signalStableOk: 'Tín hiệu GPS dao động quá 50m',
-  sampleCountOk: 'Chưa đủ 3 mẫu GPS để kiểm tra',
+  sampleCountOk: 'Chưa đủ 4 mẫu GPS để kiểm tra',
   noMockedFlag: 'Phát hiện mock location/vị trí giả',
 }
 

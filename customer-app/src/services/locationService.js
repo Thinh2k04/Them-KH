@@ -1,9 +1,9 @@
 const TRACKING_SCRAPE_API_URL = 'https://jsk9x6z4-3000.asse.devtunnels.ms/api/tracking/scrape'
 const MAX_TRACKING_AGE_MS = 5 * 60 * 1000
-const GPS_SAMPLE_TARGET = 8
-const GPS_MIN_SAMPLE_COUNT = 2
-const GPS_MAX_WAIT_MS = 15000
-const GPS_FAST_ACCEPT_ACCURACY_METERS = 15
+const GPS_SAMPLE_TARGET = 12
+const GPS_MIN_SAMPLE_COUNT = 4
+const GPS_MAX_WAIT_MS = 25000
+const GPS_FAST_ACCEPT_ACCURACY_METERS = 12
 const GPS_UNUSABLE_ACCURACY_METERS = 1000
 
 const MONTH_INDEX = {
@@ -216,7 +216,7 @@ export async function collectGpsLocation() {
         const normalized = normalizePosition(position)
         if (
           normalized &&
-          samples.length >= Math.min(3, GPS_SAMPLE_TARGET) &&
+          samples.length >= Math.min(6, GPS_SAMPLE_TARGET) &&
           normalized.accuracy <= GPS_FAST_ACCEPT_ACCURACY_METERS
         ) {
           finish()
