@@ -125,10 +125,6 @@ function isStandalonePWA() {
   )
 }
 
-function formatMetric(value, suffix = '') {
-  return Number.isFinite(value) ? `${Number(value).toFixed(1)}${suffix}` : 'Không có'
-}
-
 function getPWAChecks({ installPrompt, serviceWorkerReady }) {
   const isSecure = window.isSecureContext
   const isStandalone = isStandalonePWA()
@@ -1471,23 +1467,8 @@ function App() {
   }
 
   function applyVerifiedLocation(verified) {
-    setLocationData(verified)
-
-    if (Number.isFinite(verified?.lat) && Number.isFinite(verified?.lng)) {
-      void reverseGeocodeWardAndProvince(verified.lat, verified.lng)
-        .then(({ phuong, tinh }) => {
-          if (phuong || tinh) {
-            setForm((prev) => ({
-              ...prev,
-              phuong: phuong || prev.phuong || '',
-              tinh: tinh || prev.tinh || '',
-            }))
-          }
-        })
-        .catch(() => {})
-    }
-
     if (!verified.trusted) {
+      resetTrackingResult()
       const failedChecks = Object.entries(verified.checks)
         .filter(([, value]) => !value)
         .map(([key]) => CHECK_LABELS[key])
@@ -1505,9 +1486,25 @@ function App() {
         message: rejectionInfo.message,
         hints: rejectionInfo.hints,
         failedChecks,
-        locationData: verified,
       })
       setError('')
+      return
+    }
+
+    setLocationData(verified)
+
+    if (Number.isFinite(verified?.lat) && Number.isFinite(verified?.lng)) {
+      void reverseGeocodeWardAndProvince(verified.lat, verified.lng)
+        .then(({ phuong, tinh }) => {
+          if (phuong || tinh) {
+            setForm((prev) => ({
+              ...prev,
+              phuong: phuong || prev.phuong || '',
+              tinh: tinh || prev.tinh || '',
+            }))
+          }
+        })
+        .catch(() => {})
     }
   }
 
@@ -1975,14 +1972,6 @@ function App() {
                       <li key={hint}>{hint}</li>
                     ))}
                   </ul>
-                ) : null}
-                {locationInlineNotice.locationData ? (
-                  <p>
-                    Accuracy: {formatMetric(locationInlineNotice.locationData.accuracy, 'm')} ·
-                    Spread: {formatMetric(locationInlineNotice.locationData.spread, 'm')} ·
-                    Tín hiệu lệch: {formatMetric(locationInlineNotice.locationData.accuracySpread, 'm')} ·
-                    Tốc độ: {formatMetric(locationInlineNotice.locationData.maxSpeedKmH, 'km/h')}
-                  </p>
                 ) : null}
               </div>
             ) : null}
