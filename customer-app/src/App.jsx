@@ -118,15 +118,6 @@ function isStandalonePWA() {
   )
 }
 
-function getFailedLocationChecks(locationData) {
-  return Object.entries(locationData?.checks || {})
-    .filter(([, value]) => !value)
-    .map(([key]) => ({
-      key,
-      label: CHECK_LABELS[key] || key,
-    }))
-}
-
 function formatMetric(value, suffix = '') {
   return Number.isFinite(value) ? `${Number(value).toFixed(1)}${suffix}` : 'Không có'
 }
@@ -654,6 +645,7 @@ function App() {
   const [showLocationPrompt, setShowLocationPrompt] = useState(false)
   const [loadingLocation, setLoadingLocation] = useState(false)
   const [locationRejectionInfo, setLocationRejectionInfo] = useState(null)
+  const [locationInlineNotice, setLocationInlineNotice] = useState(null)
   const [trackingLink, setTrackingLink] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -1405,7 +1397,19 @@ function App() {
 
     setError('')
     setLocationRejectionInfo(null)
+    setLocationInlineNotice(null)
     void handleResolveLocation()
+  }
+
+  function handleOpenGpsPrompt() {
+    if (gettingLocationRef.current || loadingLocation) {
+      return
+    }
+
+    setError('')
+    setLocationRejectionInfo(null)
+    setLocationInlineNotice(null)
+    setShowLocationPrompt(true)
   }
 
   function resetTrackingResult() {
@@ -1416,6 +1420,7 @@ function App() {
     setDmsStatus(null)
     setShowExpandedMap(false)
     setLocationRejectionInfo(null)
+    setLocationInlineNotice(null)
   }
 
   function applyTrackingLink(nextLink) {
@@ -1488,7 +1493,14 @@ function App() {
       })
 
       setLocationRejectionInfo(rejectionInfo)
-      setError(rejectionInfo.message)
+      setLocationInlineNotice({
+        title: 'Vị trí chưa đạt chuẩn',
+        message: rejectionInfo.message,
+        hints: rejectionInfo.hints,
+        failedChecks,
+        locationData: verified,
+      })
+      setError('')
     }
   }
 
@@ -1509,6 +1521,7 @@ function App() {
     setLoadingLocation(true)
     setDmsStatus(null)
     setLocationRejectionInfo(null)
+    setLocationInlineNotice(null)
 
     try {
       resetMiniMap()
@@ -1540,6 +1553,7 @@ function App() {
     setLoadingLocation(true)
     setDmsStatus(null)
     setLocationRejectionInfo(null)
+    setLocationInlineNotice(null)
     setError('')
 
     try {
@@ -1555,9 +1569,19 @@ function App() {
         secureContext: window.isSecureContext,
       })
 
-      setLocationRejectionInfo(rejectionInfo)
-      setError(message)
-      setShowLocationPrompt(true)
+      if (err?.code === 1) {
+        setLocationRejectionInfo(rejectionInfo)
+        setError(message)
+        setShowLocationPrompt(true)
+      } else {
+        setShowLocationPrompt(false)
+        setLocationInlineNotice({
+          title: rejectionInfo.title,
+          message: rejectionInfo.message,
+          hints: rejectionInfo.hints,
+        })
+        setError('')
+      }
     } finally {
       setLoadingLocation(false)
       gettingLocationRef.current = false
@@ -1919,13 +1943,43 @@ function App() {
                 <button
                   type="button"
                   className="gps-location-btn"
-                  onClick={handleResolveGpsLocation}
+                  onClick={handleOpenGpsPrompt}
                   disabled={loadingLocation}
                 >
                   {loadingLocation ? 'Đang...' : 'GPS chuẩn'}
                 </button>
               </div>
             </div>
+
+            {locationInlineNotice ? (
+              <div className="location-warning-card">
+                <strong>{locationInlineNotice.title}</strong>
+                <p>{locationInlineNotice.message}</p>
+                {locationInlineNotice.failedChecks?.length ? (
+                  <ul>
+                    {locationInlineNotice.failedChecks.map((check) => (
+                      <li key={check}>{check}</li>
+                    ))}
+                  </ul>
+                ) : null}
+                {locationInlineNotice.hints?.length ? (
+                  <ul>
+                    {locationInlineNotice.hints.map((hint) => (
+                      <li key={hint}>{hint}</li>
+                    ))}
+                  </ul>
+                ) : null}
+                {locationInlineNotice.locationData ? (
+                  <p>
+                    Accuracy: {formatMetric(locationInlineNotice.locationData.accuracy, 'm')} ·
+                    Spread: {formatMetric(locationInlineNotice.locationData.spread, 'm')} ·
+                    Tín hiệu lệch: {formatMetric(locationInlineNotice.locationData.accuracySpread, 'm')} ·
+                    Tốc độ: {formatMetric(locationInlineNotice.locationData.maxSpeedKmH, 'km/h')}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
             {locationData ? (
               <div className="row-buttons location-extra-actions">
                 <button
@@ -1961,22 +2015,6 @@ function App() {
                   Khách hàng DMS trong khu vực: <strong>{loadingDmsCustomers ? 'Đang tải...' : dmsCustomers.length}</strong>
                 </p>
                 <div ref={miniMapRef} className="mini-map-frame" />
-              </div>
-            ) : null}
-
-            {locationData && !locationData.trusted ? (
-              <div className="location-warning-card">
-                <strong>Vị trí chưa đạt chuẩn chống fake</strong>
-                <p>App vẫn hiển thị tọa độ và bản đồ để kiểm tra, nhưng chưa cho xác nhận/lưu khách hàng.</p>
-                <ul>
-                  {getFailedLocationChecks(locationData).map((check) => (
-                    <li key={check.key}>{check.label}</li>
-                  ))}
-                </ul>
-                <p>
-                  Accuracy: {formatMetric(locationData.accuracy, 'm')} · Spread: {formatMetric(locationData.spread, 'm')} ·
-                  Tín hiệu lệch: {formatMetric(locationData.accuracySpread, 'm')} · Tốc độ: {formatMetric(locationData.maxSpeedKmH, 'km/h')}
-                </p>
               </div>
             ) : null}
 
