@@ -1547,6 +1547,7 @@ function App() {
       applyVerifiedLocation(await collectGpsLocation())
     } catch (err) {
       const message = err?.message || 'Không thể lấy GPS chính xác. Vui lòng thử lại.'
+      resetTrackingResult()
       const rejectionInfo = buildLocationRejectionInfo({
         message,
         code: err?.code,

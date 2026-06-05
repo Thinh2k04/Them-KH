@@ -4,6 +4,7 @@ const GPS_SAMPLE_TARGET = 8
 const GPS_MIN_SAMPLE_COUNT = 3
 const GPS_MAX_WAIT_MS = 15000
 const GPS_FAST_ACCEPT_ACCURACY_METERS = 15
+const GPS_UNUSABLE_ACCURACY_METERS = 1000
 
 const MONTH_INDEX = {
   jan: 0,
@@ -220,6 +221,15 @@ export async function collectGpsLocation() {
   })
 
   const summary = summarizeGpsSamples(samples)
+
+  if (!Number.isFinite(summary.accuracy) || summary.accuracy > GPS_UNUSABLE_ACCURACY_METERS) {
+    const error = new Error('Máy đang tắt dịch vụ vị trí hoặc GPS, nên không thể lấy tọa độ chính xác.')
+    error.code = 2
+    error.reason = 'gps_unusable'
+    error.summary = summary
+    throw error
+  }
+
   const checks = {
     accuracyOk: Number.isFinite(summary.accuracy) && summary.accuracy >= 1.5 && summary.accuracy <= 60,
     spreadOk: Number.isFinite(summary.spread) && summary.spread <= 40,
