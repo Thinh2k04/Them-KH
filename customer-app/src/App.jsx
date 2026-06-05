@@ -58,7 +58,14 @@ function buildLocationRejectionInfo({
     return rejection
   }
 
-  if (code === 2 || /GPS|dịch vụ vị trí|định vị/i.test(normalizedMessage)) {
+  if (code === 'GPS_LOW_ACCURACY') {
+    rejection.title = 'GPS chưa đủ chính xác'
+    rejection.message = normalizedMessage || 'GPS đang bật nhưng tín hiệu chưa đủ chính xác để lấy vị trí chuẩn.'
+    rejection.hints = ['Ra nơi thoáng hơn hoặc gần cửa sổ', 'Chờ vài giây để GPS bắt thêm vệ tinh', 'Tắt chế độ tiết kiệm pin nếu đang bật rồi thử lại']
+    return rejection
+  }
+
+  if (code === 2) {
     rejection.title = 'Thiết bị chưa bật GPS'
     rejection.message = 'Máy đang tắt dịch vụ vị trí hoặc GPS, nên không thể lấy tọa độ chính xác.'
     rejection.hints = ['Bật GPS/dịch vụ vị trí trên máy', 'Ra nơi thoáng để bắt tín hiệu tốt hơn', 'Thử lại sau vài giây']

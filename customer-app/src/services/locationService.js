@@ -241,9 +241,9 @@ export async function collectGpsLocation() {
   const summary = summarizeGpsSamples(samples)
 
   if (!Number.isFinite(summary.accuracy) || summary.accuracy > GPS_UNUSABLE_ACCURACY_METERS) {
-    const error = new Error('Máy đang tắt dịch vụ vị trí hoặc GPS, nên không thể lấy tọa độ chính xác.')
-    error.code = 2
-    error.reason = 'gps_unusable'
+    const error = new Error('GPS đang bật nhưng tín hiệu chưa đủ chính xác để lấy vị trí chuẩn.')
+    error.code = 'GPS_LOW_ACCURACY'
+    error.reason = 'gps_low_accuracy'
     error.summary = summary
     throw error
   }
