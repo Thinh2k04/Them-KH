@@ -28,10 +28,10 @@
       "purpose": "any"
     },
     {
-      "src": "/Them-KH/favicon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "src": "/Them-KH/logo22px_re6vqu.png",
+      "sizes": "48x46",
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }
