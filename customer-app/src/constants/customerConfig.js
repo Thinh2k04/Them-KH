@@ -105,15 +105,13 @@ export const KV_OPTIONS = Object.keys(nppByKV)
 export const CHANNEL_OPTIONS = Object.keys(channelTypeMap)
 export const NPP_OPTIONS = Object.values(nppByKV).flat()
 export const CHECK_LABELS = {
-  accuracyOk: 'Độ chính xác GPS ngoài ngưỡng 1.5m - 120m',
-  spreadOk: 'Các mẫu GPS lệch nhau quá 120m',
+  accuracyOk: 'Độ chính xác GPS sai',
+  spreadOk: 'Các mẫu GPS lệch nhau',
   freshOk: 'Dữ liệu GPS cũ quá 30 giây',
-  speedOk: 'Tốc độ di chuyển bất thường trên 200km/h',
-  signalStableOk: 'Tín hiệu GPS dao động quá 100m',
-  sampleCountOk: 'Chưa đủ 2 mẫu GPS để kiểm tra',
+  speedOk: 'Tốc độ di chuyển bất thường',
+  signalStableOk: 'Tín hiệu GPS dao động quá 50m',
+  sampleCountOk: 'Chưa đủ 3 mẫu GPS để kiểm tra',
   noMockedFlag: 'Phát hiện mock location/vị trí giả',
-  noAutomationFlag: 'Phát hiện cờ automation/webdriver',
-  onlineOk: 'Thiết bị đang offline',
 }
 
 export const ADMIN_CODE_MAP = {

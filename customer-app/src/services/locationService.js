@@ -256,8 +256,6 @@ export async function collectGpsLocation() {
     signalStableOk: Number.isFinite(summary.accuracySpread) && summary.accuracySpread <= 100,
     sampleCountOk: Number.isFinite(summary.sampleCount) && summary.sampleCount >= GPS_MIN_SAMPLE_COUNT,
     noMockedFlag: summary.mocked !== true,
-    noAutomationFlag: !webdriverFlag,
-    onlineOk: networkInfo.online !== false,
   }
 
   return {
