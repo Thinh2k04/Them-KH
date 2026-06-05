@@ -1,5 +1,8 @@
 const TRACKING_SCRAPE_API_URL = 'https://jsk9x6z4-3000.asse.devtunnels.ms/api/tracking/scrape'
 const MAX_TRACKING_AGE_MS = 5 * 60 * 1000
+const GPS_SAMPLE_TARGET = 5
+const GPS_MAX_WAIT_MS = 10000
+const GPS_FAST_ACCEPT_ACCURACY_METERS = 20
 
 const MONTH_INDEX = {
   jan: 0,
@@ -49,8 +52,208 @@ function toCoordinate(value, maxAbs) {
   return Number.isFinite(parsed) && Math.abs(parsed) <= maxAbs ? parsed : null
 }
 
+function calculateDistanceMeters(lat1, lng1, lat2, lng2) {
+  const toRad = (value) => (value * Math.PI) / 180
+  const earthRadiusMeters = 6371000
+  const dLat = toRad(lat2 - lat1)
+  const dLng = toRad(lng2 - lng1)
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2
+
+  return 2 * earthRadiusMeters * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
 function isEmptyObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0
+}
+
+function normalizePosition(position) {
+  const coords = position?.coords || {}
+  const lat = toCoordinate(coords.latitude, 90)
+  const lng = toCoordinate(coords.longitude, 180)
+
+  if (lat === null || lng === null) {
+    return null
+  }
+
+  return {
+    lat,
+    lng,
+    accuracy: Number(coords.accuracy),
+    speed: Number(coords.speed),
+    timestamp: Number(position.timestamp) || Date.now(),
+    mocked: coords.mocked === true || position.mocked === true,
+  }
+}
+
+function summarizeGpsSamples(samples) {
+  const validSamples = samples
+    .map(normalizePosition)
+    .filter(Boolean)
+    .filter((sample) => Number.isFinite(sample.accuracy))
+
+  if (validSamples.length === 0) {
+    throw new Error('Không lấy được mẫu GPS hợp lệ. Vui lòng bật GPS và thử lại.')
+  }
+
+  const bestSample = validSamples.reduce((best, sample) =>
+    sample.accuracy < best.accuracy ? sample : best
+  )
+  const accuracies = validSamples.map((sample) => sample.accuracy)
+  const spread = Math.max(
+    0,
+    ...validSamples.map((sample) =>
+      calculateDistanceMeters(bestSample.lat, bestSample.lng, sample.lat, sample.lng)
+    )
+  )
+  const speedFromCoords = validSamples
+    .map((sample) => sample.speed)
+    .filter((speed) => Number.isFinite(speed) && speed >= 0)
+    .map((speed) => speed * 3.6)
+  const speedFromSamples = validSamples.slice(1).map((sample, index) => {
+    const previous = validSamples[index]
+    const seconds = Math.abs(sample.timestamp - previous.timestamp) / 1000
+    if (seconds <= 0) {
+      return 0
+    }
+
+    const meters = calculateDistanceMeters(previous.lat, previous.lng, sample.lat, sample.lng)
+    return (meters / seconds) * 3.6
+  })
+  const maxSpeedKmH = Math.max(0, ...speedFromCoords, ...speedFromSamples)
+  const newestTimestamp = Math.max(...validSamples.map((sample) => sample.timestamp))
+
+  return {
+    ...bestSample,
+    minAccuracy: Math.min(...accuracies),
+    maxAccuracy: Math.max(...accuracies),
+    accuracySpread: Math.max(...accuracies) - Math.min(...accuracies),
+    spread,
+    maxSpeedKmH,
+    sampleCount: validSamples.length,
+    ageMs: Date.now() - newestTimestamp,
+    mocked: validSamples.some((sample) => sample.mocked === true),
+    samples: validSamples,
+  }
+}
+
+export async function collectGpsLocation() {
+  if (!window.isSecureContext) {
+    throw new Error('Trang phải chạy bằng HTTPS hoặc localhost để lấy GPS chính xác.')
+  }
+
+  if (!navigator.geolocation) {
+    throw new Error('Trình duyệt không hỗ trợ GPS.')
+  }
+
+  const webdriverFlag = navigator.webdriver === true
+  const networkInfo = {
+    supported: Boolean(navigator.connection),
+    online: navigator.onLine,
+    effectiveType: navigator.connection?.effectiveType || '',
+  }
+
+  const samples = []
+
+  await new Promise((resolve, reject) => {
+    let settled = false
+    let watchId = null
+    let maxWaitTimer = null
+
+    const finish = () => {
+      if (settled) {
+        return
+      }
+
+      settled = true
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId)
+      }
+      clearTimeout(maxWaitTimer)
+      resolve()
+    }
+
+    const fail = (error) => {
+      if (samples.length > 0) {
+        finish()
+        return
+      }
+
+      if (settled) {
+        return
+      }
+
+      settled = true
+      clearTimeout(maxWaitTimer)
+      reject(error)
+    }
+
+    watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        samples.push(position)
+
+        const normalized = normalizePosition(position)
+        if (
+          normalized &&
+          samples.length >= Math.min(3, GPS_SAMPLE_TARGET) &&
+          normalized.accuracy <= GPS_FAST_ACCEPT_ACCURACY_METERS
+        ) {
+          finish()
+          return
+        }
+
+        if (samples.length >= GPS_SAMPLE_TARGET) {
+          finish()
+        }
+      },
+      fail,
+      {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: GPS_MAX_WAIT_MS,
+      }
+    )
+
+    maxWaitTimer = setTimeout(finish, GPS_MAX_WAIT_MS)
+  })
+
+  const summary = summarizeGpsSamples(samples)
+  const checks = {
+    accuracyOk: Number.isFinite(summary.accuracy) && summary.accuracy >= 1.5 && summary.accuracy <= 60,
+    spreadOk: Number.isFinite(summary.spread) && summary.spread <= 40,
+    freshOk: Number.isFinite(summary.ageMs) && summary.ageMs <= 30000,
+    speedOk: Number.isFinite(summary.maxSpeedKmH) && summary.maxSpeedKmH <= 200,
+    signalStableOk: Number.isFinite(summary.accuracySpread) && summary.accuracySpread <= 50,
+    sampleCountOk: Number.isFinite(summary.sampleCount) && summary.sampleCount >= 1,
+    noMockedFlag: summary.mocked !== true,
+    noAutomationFlag: !webdriverFlag,
+    onlineOk: networkInfo.online !== false,
+  }
+
+  return {
+    lat: summary.lat,
+    lng: summary.lng,
+    accuracy: summary.accuracy,
+    minAccuracy: summary.minAccuracy,
+    maxAccuracy: summary.maxAccuracy,
+    accuracySpread: summary.accuracySpread,
+    spread: summary.spread,
+    maxSpeedKmH: summary.maxSpeedKmH,
+    sampleCount: summary.sampleCount,
+    timestamp: summary.timestamp,
+    capturedDate: new Date(summary.timestamp).toLocaleDateString('vi-VN'),
+    capturedTime: new Date(summary.timestamp).toLocaleTimeString('vi-VN'),
+    ageMs: summary.ageMs,
+    source: 'gps',
+    trustScore: Object.values(checks).filter(Boolean).length,
+    trusted: Object.values(checks).every(Boolean),
+    checks,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown',
+    networkInfo,
+    webdriverFlag,
+    samples: summary.samples,
+  }
 }
 
 export async function collectVerifiedLocation(link) {

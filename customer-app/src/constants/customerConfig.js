@@ -110,8 +110,9 @@ export const CHECK_LABELS = {
   freshOk: 'Dữ liệu GPS mới',
   speedOk: 'Không có tốc độ di chuyển bất thường',
   signalStableOk: 'Tín hiệu GPS ổn định',
+  sampleCountOk: 'Đủ mẫu GPS để kiểm tra',
+  noMockedFlag: 'Không phát hiện mock location',
   noAutomationFlag: 'Không phát hiện cờ automation',
-  timezoneOk: 'Múi giờ thiết bị hợp lệ',
   onlineOk: 'Thiết bị đang online',
 }
 

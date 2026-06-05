@@ -13,7 +13,7 @@ import {
   nppByKV,
   nganh_hang_options,
 } from './constants/customerConfig'
-import { collectVerifiedLocation } from './services/locationService'
+import { collectGpsLocation, collectVerifiedLocation } from './services/locationService'
 import { createInitialForm, formatDate } from './utils/customerHelpers'
 import 'leaflet/dist/leaflet.css'
 import 'leaflet.markercluster'
@@ -1445,6 +1445,49 @@ function App() {
     applyTrackingLink(nextLink)
   }
 
+  function applyVerifiedLocation(verified) {
+    setLocationData(verified)
+
+    if (Number.isFinite(verified?.lat) && Number.isFinite(verified?.lng)) {
+      void reverseGeocodeWardAndProvince(verified.lat, verified.lng)
+        .then(({ phuong, tinh }) => {
+          if (phuong || tinh) {
+            setForm((prev) => ({
+              ...prev,
+              phuong: phuong || prev.phuong || '',
+              tinh: tinh || prev.tinh || '',
+            }))
+          }
+        })
+        .catch(() => {})
+    }
+
+    if (!verified.trusted) {
+      const failedChecks = Object.entries(verified.checks)
+        .filter(([, value]) => !value)
+        .map(([key]) => CHECK_LABELS[key])
+        .filter(Boolean)
+      const rejectionInfo = buildLocationRejectionInfo({
+        message: `Vị trí có thể không chính xác. Kiểm tra thất bại: ${failedChecks.join(', ')}.`,
+        permissionState: 'granted',
+        secureContext: window.isSecureContext,
+        failedChecks,
+      })
+
+      setLocationRejectionInfo(rejectionInfo)
+      setError(rejectionInfo.message)
+      setShowLocationPrompt(true)
+    }
+  }
+
+  function resetMiniMap() {
+    if (miniMapInstanceRef.current) {
+      miniMapInstanceRef.current.remove()
+      miniMapInstanceRef.current = null
+      miniMapLayersRef.current = []
+    }
+  }
+
   async function handleResolveLocation() {
     if (gettingLocationRef.current || loadingLocation) {
       return
@@ -1456,46 +1499,8 @@ function App() {
     setLocationRejectionInfo(null)
 
     try {
-      if (miniMapInstanceRef.current) {
-        miniMapInstanceRef.current.remove()
-        miniMapInstanceRef.current = null
-        miniMapLayersRef.current = []
-      }
-
-      const verified = await collectVerifiedLocation(trackingLink)
-      setLocationData(verified)
-
-      if (Number.isFinite(verified?.lat) && Number.isFinite(verified?.lng)) {
-        // Reverse geocode in background so location flow is responsive.
-        void reverseGeocodeWardAndProvince(verified.lat, verified.lng)
-          .then(({ phuong, tinh }) => {
-            if (phuong || tinh) {
-              setForm((prev) => ({
-                ...prev,
-                phuong: phuong || prev.phuong || '',
-                tinh: tinh || prev.tinh || '',
-              }))
-            }
-          })
-          .catch(() => {})
-      }
-
-      if (!verified.trusted) {
-        const failedChecks = Object.entries(verified.checks)
-          .filter(([, value]) => !value)
-          .map(([key]) => CHECK_LABELS[key])
-          .filter(Boolean)
-        const rejectionInfo = buildLocationRejectionInfo({
-          message: `Vị trí có thể không chính xác. Kiểm tra thất bại: ${failedChecks.join(', ')}.`,
-          permissionState: 'granted',
-          secureContext: window.isSecureContext,
-          failedChecks,
-        })
-
-        setLocationRejectionInfo(rejectionInfo)
-        setError(rejectionInfo.message)
-        setShowLocationPrompt(true)
-      }
+      resetMiniMap()
+      applyVerifiedLocation(await collectVerifiedLocation(trackingLink))
     } catch (err) {
       const message = err?.message || 'Không thể lấy vị trí. Vui lòng thử lại.'
       const rejectionInfo = buildLocationRejectionInfo({
@@ -1507,6 +1512,39 @@ function App() {
 
       setLocationRejectionInfo(rejectionInfo)
       setError(message)
+    } finally {
+      setLoadingLocation(false)
+      gettingLocationRef.current = false
+    }
+  }
+
+  async function handleResolveGpsLocation() {
+    if (gettingLocationRef.current || loadingLocation) {
+      return
+    }
+
+    gettingLocationRef.current = true
+    setShowLocationPrompt(false)
+    setLoadingLocation(true)
+    setDmsStatus(null)
+    setLocationRejectionInfo(null)
+    setError('')
+
+    try {
+      resetMiniMap()
+      applyVerifiedLocation(await collectGpsLocation())
+    } catch (err) {
+      const message = err?.message || 'Không thể lấy GPS chính xác. Vui lòng thử lại.'
+      const rejectionInfo = buildLocationRejectionInfo({
+        message,
+        code: err?.code,
+        permissionState: err?.code === 1 ? 'denied' : 'granted',
+        secureContext: window.isSecureContext,
+      })
+
+      setLocationRejectionInfo(rejectionInfo)
+      setError(message)
+      setShowLocationPrompt(true)
     } finally {
       setLoadingLocation(false)
       gettingLocationRef.current = false
@@ -1863,7 +1901,15 @@ function App() {
                   onClick={handleOpenLocationPrompt}
                   disabled={loadingLocation}
                 >
-                  {loadingLocation ? 'Đang...' : locationData ? 'Lấy lại' : 'Lấy vị trí'}
+                  {loadingLocation ? 'Đang...' : 'Lấy từ link'}
+                </button>
+                <button
+                  type="button"
+                  className="gps-location-btn"
+                  onClick={handleResolveGpsLocation}
+                  disabled={loadingLocation}
+                >
+                  {loadingLocation ? 'Đang...' : 'GPS chuẩn'}
                 </button>
               </div>
             </div>
@@ -2318,7 +2364,7 @@ function App() {
               >
                 Đóng
               </button>
-              <button type="button" onClick={handleResolveLocation} disabled={loadingLocation}>
+              <button type="button" onClick={handleResolveGpsLocation} disabled={loadingLocation}>
                 Tôi đã bật GPS
               </button>
             </div>

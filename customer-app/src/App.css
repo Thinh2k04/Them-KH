@@ -328,7 +328,7 @@ button:active {
 
 .tracking-link-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 146px;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   align-items: end;
   margin: 10px 0;
@@ -383,20 +383,22 @@ button:active {
 
 .tracking-actions {
   display: grid;
-  grid-template-columns: 66px 72px;
+  grid-template-columns: 56px minmax(0, 1fr) minmax(0, 1fr);
   gap: 6px;
   align-items: stretch;
 }
 
 .paste-link-btn,
-.fetch-location-btn {
+.fetch-location-btn,
+.gps-location-btn {
   width: 100%;
   min-height: 46px;
   padding-inline: 6px;
   white-space: nowrap;
 }
 
-.fetch-location-btn {
+.fetch-location-btn,
+.gps-location-btn {
   font-size: 13px;
 }
 
@@ -926,11 +928,11 @@ button:active {
   }
 
   .tracking-link-row {
-    grid-template-columns: minmax(0, 1fr) 218px;
+    grid-template-columns: minmax(0, 1fr) 320px;
   }
 
   .tracking-actions {
-    grid-template-columns: 104px 106px;
+    grid-template-columns: 66px 118px 124px;
   }
 
   .list-actions {
