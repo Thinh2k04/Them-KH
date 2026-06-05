@@ -110,7 +110,12 @@ function getInAppBrowserName(userAgent) {
 }
 
 function isStandalonePWA() {
-  return window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true
+  return (
+    window.matchMedia?.('(display-mode: fullscreen)').matches ||
+    window.matchMedia?.('(display-mode: standalone)').matches ||
+    window.matchMedia?.('(display-mode: minimal-ui)').matches ||
+    window.navigator.standalone === true
+  )
 }
 
 function getPWAChecks({ installPrompt, serviceWorkerReady }) {
@@ -769,15 +774,24 @@ function App() {
     window.addEventListener('pwa-status-change', handlePWAStatusChange)
     navigator.serviceWorker?.addEventListener?.('controllerchange', handleControllerChange)
 
-    const standaloneQuery = window.matchMedia?.('(display-mode: standalone)')
-    standaloneQuery?.addEventListener?.('change', handleDisplayModeChange)
+    const displayModeQueries = [
+      window.matchMedia?.('(display-mode: fullscreen)'),
+      window.matchMedia?.('(display-mode: standalone)'),
+      window.matchMedia?.('(display-mode: minimal-ui)'),
+    ].filter(Boolean)
+
+    displayModeQueries.forEach((query) => {
+      query.addEventListener?.('change', handleDisplayModeChange)
+    })
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
       window.removeEventListener('appinstalled', handleAppInstalled)
       window.removeEventListener('pwa-status-change', handlePWAStatusChange)
       navigator.serviceWorker?.removeEventListener?.('controllerchange', handleControllerChange)
-      standaloneQuery?.removeEventListener?.('change', handleDisplayModeChange)
+      displayModeQueries.forEach((query) => {
+        query.removeEventListener?.('change', handleDisplayModeChange)
+      })
     }
   }, [])
 
