@@ -514,6 +514,33 @@ button:active {
   font-size: 14px;
 }
 
+.location-warning-card {
+  margin-top: 10px;
+  border: 1px solid #fecaca;
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: #fff1f2;
+  color: #7f1d1d;
+}
+
+.location-warning-card strong {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.location-warning-card p {
+  margin: 5px 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.location-warning-card ul {
+  margin: 8px 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+
 .list-panel {
   min-height: 0;
 }

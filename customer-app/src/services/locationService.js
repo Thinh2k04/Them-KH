@@ -1,8 +1,9 @@
 const TRACKING_SCRAPE_API_URL = 'https://jsk9x6z4-3000.asse.devtunnels.ms/api/tracking/scrape'
 const MAX_TRACKING_AGE_MS = 5 * 60 * 1000
-const GPS_SAMPLE_TARGET = 5
-const GPS_MAX_WAIT_MS = 10000
-const GPS_FAST_ACCEPT_ACCURACY_METERS = 20
+const GPS_SAMPLE_TARGET = 8
+const GPS_MIN_SAMPLE_COUNT = 3
+const GPS_MAX_WAIT_MS = 15000
+const GPS_FAST_ACCEPT_ACCURACY_METERS = 15
 
 const MONTH_INDEX = {
   jan: 0,
@@ -225,7 +226,7 @@ export async function collectGpsLocation() {
     freshOk: Number.isFinite(summary.ageMs) && summary.ageMs <= 30000,
     speedOk: Number.isFinite(summary.maxSpeedKmH) && summary.maxSpeedKmH <= 200,
     signalStableOk: Number.isFinite(summary.accuracySpread) && summary.accuracySpread <= 50,
-    sampleCountOk: Number.isFinite(summary.sampleCount) && summary.sampleCount >= 1,
+    sampleCountOk: Number.isFinite(summary.sampleCount) && summary.sampleCount >= GPS_MIN_SAMPLE_COUNT,
     noMockedFlag: summary.mocked !== true,
     noAutomationFlag: !webdriverFlag,
     onlineOk: networkInfo.online !== false,

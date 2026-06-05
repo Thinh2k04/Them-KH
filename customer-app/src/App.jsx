@@ -118,6 +118,19 @@ function isStandalonePWA() {
   )
 }
 
+function getFailedLocationChecks(locationData) {
+  return Object.entries(locationData?.checks || {})
+    .filter(([, value]) => !value)
+    .map(([key]) => ({
+      key,
+      label: CHECK_LABELS[key] || key,
+    }))
+}
+
+function formatMetric(value, suffix = '') {
+  return Number.isFinite(value) ? `${Number(value).toFixed(1)}${suffix}` : 'Không có'
+}
+
 function getPWAChecks({ installPrompt, serviceWorkerReady }) {
   const isSecure = window.isSecureContext
   const isStandalone = isStandalonePWA()
@@ -1476,7 +1489,6 @@ function App() {
 
       setLocationRejectionInfo(rejectionInfo)
       setError(rejectionInfo.message)
-      setShowLocationPrompt(true)
     }
   }
 
@@ -1924,15 +1936,17 @@ function App() {
                 </button>
               </div>
             ) : null}
-            {locationData && detectedNpp && detectedKv && (
+            {locationData ? (
               <ul className="meta-list">
                 <li>Vĩ độ: {locationData.lat.toFixed(8)}</li>
                 <li>Kinh độ: {locationData.lng.toFixed(8)}</li>
                 {locationData.capturedDate && locationData.capturedTime ? (
                   <li>Thời gian định vị: {locationData.capturedTime} {locationData.capturedDate}</li>
                 ) : null}
+                <li>Độ chính xác: {formatMetric(locationData.accuracy, 'm')}</li>
+                <li>Số mẫu GPS: {Number.isFinite(locationData.sampleCount) ? locationData.sampleCount : locationData.samples?.length || 1}</li>
               </ul>
-            )}
+            ) : null}
 
             {locationData ? (
               <div className="location-map-card">
@@ -1946,6 +1960,22 @@ function App() {
                   Khách hàng DMS trong khu vực: <strong>{loadingDmsCustomers ? 'Đang tải...' : dmsCustomers.length}</strong>
                 </p>
                 <div ref={miniMapRef} className="mini-map-frame" />
+              </div>
+            ) : null}
+
+            {locationData && !locationData.trusted ? (
+              <div className="location-warning-card">
+                <strong>Vị trí chưa đạt chuẩn chống fake</strong>
+                <p>App vẫn hiển thị tọa độ và bản đồ để kiểm tra, nhưng chưa cho xác nhận/lưu khách hàng.</p>
+                <ul>
+                  {getFailedLocationChecks(locationData).map((check) => (
+                    <li key={check.key}>{check.label}</li>
+                  ))}
+                </ul>
+                <p>
+                  Accuracy: {formatMetric(locationData.accuracy, 'm')} · Spread: {formatMetric(locationData.spread, 'm')} ·
+                  Tín hiệu lệch: {formatMetric(locationData.accuracySpread, 'm')} · Tốc độ: {formatMetric(locationData.maxSpeedKmH, 'km/h')}
+                </p>
               </div>
             ) : null}
 
