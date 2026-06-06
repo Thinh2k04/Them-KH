@@ -1,9 +1,9 @@
 const TRACKING_SCRAPE_API_URL = 'https://jsk9x6z4-3000.asse.devtunnels.ms/api/tracking/scrape'
 const MAX_TRACKING_AGE_MS = 5 * 60 * 1000
-const GPS_SAMPLE_TARGET = 12
+const GPS_SAMPLE_TARGET = 8
 const GPS_MIN_SAMPLE_COUNT = 3
-const GPS_MAX_WAIT_MS = 25000
-const GPS_FAST_ACCEPT_ACCURACY_METERS = 12
+const GPS_MAX_WAIT_MS = 15000
+const GPS_FAST_ACCEPT_ACCURACY_METERS = 18
 const GPS_UNUSABLE_ACCURACY_METERS = 1000
 
 const MONTH_INDEX = {
@@ -105,6 +105,27 @@ function summarizeGpsSamples(samples) {
   const bestSample = validSamples.reduce((best, sample) =>
     sample.accuracy < best.accuracy ? sample : best
   )
+  const topSamples = [...validSamples]
+    .sort((a, b) => a.accuracy - b.accuracy)
+    .slice(0, Math.min(5, validSamples.length))
+  const weightedPosition = topSamples.reduce(
+    (acc, sample) => {
+      const weight = 1 / Math.max(sample.accuracy, 1) ** 2
+      acc.lat += sample.lat * weight
+      acc.lng += sample.lng * weight
+      acc.weight += weight
+      return acc
+    },
+    { lat: 0, lng: 0, weight: 0 }
+  )
+  const preciseSample =
+    weightedPosition.weight > 0
+      ? {
+          ...bestSample,
+          lat: weightedPosition.lat / weightedPosition.weight,
+          lng: weightedPosition.lng / weightedPosition.weight,
+        }
+      : bestSample
   const accuracies = validSamples.map((sample) => sample.accuracy)
   const spread = Math.max(
     0,
@@ -130,7 +151,7 @@ function summarizeGpsSamples(samples) {
   const newestTimestamp = Math.max(...validSamples.map((sample) => sample.timestamp))
 
   return {
-    ...bestSample,
+    ...preciseSample,
     minAccuracy: Math.min(...accuracies),
     maxAccuracy: Math.max(...accuracies),
     accuracySpread: Math.max(...accuracies) - Math.min(...accuracies),
@@ -161,25 +182,11 @@ export async function collectGpsLocation() {
 
   const samples = []
 
-  await new Promise((resolve) => {
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        samples.push(position)
-        resolve()
-      },
-      () => resolve(),
-      {
-        enableHighAccuracy: true,
-        maximumAge: 0,
-        timeout: 3500,
-      }
-    )
-  })
-
   await new Promise((resolve, reject) => {
     let settled = false
     let watchId = null
     let maxWaitTimer = null
+    let currentPositionDone = false
 
     const finish = () => {
       if (settled) {
@@ -209,23 +216,54 @@ export async function collectGpsLocation() {
       reject(error)
     }
 
-    watchId = navigator.geolocation.watchPosition(
-      (position) => {
-        samples.push(position)
+    const hasFastAccurateFix = () => {
+      const summary = summarizeGpsSamples(samples)
+      return (
+        summary.sampleCount >= GPS_MIN_SAMPLE_COUNT &&
+        summary.accuracy <= GPS_FAST_ACCEPT_ACCURACY_METERS &&
+        summary.spread <= 80
+      )
+    }
 
-        const normalized = normalizePosition(position)
-        if (
-          normalized &&
-          samples.length >= Math.min(6, GPS_SAMPLE_TARGET) &&
-          normalized.accuracy <= GPS_FAST_ACCEPT_ACCURACY_METERS
-        ) {
+    const maybeFinish = () => {
+      if (samples.length < GPS_MIN_SAMPLE_COUNT) {
+        return
+      }
+
+      try {
+        if (hasFastAccurateFix()) {
           finish()
           return
         }
+      } catch {
+        // Keep collecting until enough valid GPS samples arrive.
+      }
 
-        if (samples.length >= GPS_SAMPLE_TARGET) {
-          finish()
-        }
+      if (samples.length >= GPS_SAMPLE_TARGET) {
+        finish()
+      }
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        currentPositionDone = true
+        samples.push(position)
+        maybeFinish()
+      },
+      () => {
+        currentPositionDone = true
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 4500,
+      }
+    )
+
+    watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        samples.push(position)
+        maybeFinish()
       },
       fail,
       {
@@ -235,7 +273,14 @@ export async function collectGpsLocation() {
       }
     )
 
-    maxWaitTimer = setTimeout(finish, GPS_MAX_WAIT_MS)
+    maxWaitTimer = setTimeout(() => {
+      if (samples.length > 0 || currentPositionDone) {
+        finish()
+        return
+      }
+
+      fail(new Error('GPS lỗi.'))
+    }, GPS_MAX_WAIT_MS)
   })
 
   const summary = summarizeGpsSamples(samples)
