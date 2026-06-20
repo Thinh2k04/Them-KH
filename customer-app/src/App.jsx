@@ -21,7 +21,7 @@ import 'leaflet.markercluster/dist/MarkerCluster.css'
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 import './App.css'
 
-const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN || 'https://jsk9x6z4-3000.asse.devtunnels.ms').replace(/\/$/, '')
+const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN || 'https://cd85mgkd-3000.jpe1.devtunnels.ms/').replace(/\/$/, '')
 const CUSTOMER_API_URL = `${API_ORIGIN}/api/khachhang/`
 const STORE_API_URL = `${API_ORIGIN}/api/cuahang`
 const DMS_NEARBY_RADIUS_METERS = 1000

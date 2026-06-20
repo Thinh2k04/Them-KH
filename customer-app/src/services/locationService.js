@@ -1,4 +1,4 @@
-const TRACKING_SCRAPE_API_URL = 'https://jsk9x6z4-3000.asse.devtunnels.ms/api/tracking/scrape'
+const TRACKING_SCRAPE_API_URL = 'https://cd85mgkd-3000.jpe1.devtunnels.ms/api/tracking/scrape'
 const MAX_TRACKING_AGE_MS = 5 * 60 * 1000
 const GPS_SAMPLE_TARGET = 8
 const GPS_MIN_SAMPLE_COUNT = 3
