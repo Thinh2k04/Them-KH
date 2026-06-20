@@ -661,7 +661,6 @@ function App() {
   const [showStoreList, setShowStoreList] = useState(false)
   const [searchCustomer, setSearchCustomer] = useState('')
   const [searchStore, setSearchStore] = useState('')
-  const [maintenanceMode, setMaintenanceMode] = useState(() => localStorage.getItem('maintenanceMode') === 'true')
 
   const fileInputRef = useRef(null)
   const miniMapRef = useRef(null)
@@ -1332,29 +1331,9 @@ function App() {
       return
     }
 
-    if (maintenanceMode && normalizedCode !== 'ADTEST') {
-      setLoginError('Hệ thống đang bảo trì. Chỉ tài khoản quản trị mới có thể đăng nhập.')
-      return
-    }
-
     setCurrentUserCode(normalizedCode)
     setCurrentUser(userName)
     setLoginCode('')
-  }
-
-  function handleLogout() {
-    setCurrentUserCode('')
-    setCurrentUser('')
-    setLoginCode('')
-    setLoginError('')
-  }
-
-  function handleToggleMaintenance() {
-    setMaintenanceMode((prev) => {
-      const next = !prev
-      localStorage.setItem('maintenanceMode', String(next))
-      return next
-    })
   }
 
   function updateField(key, value) {
@@ -1892,19 +1871,10 @@ function App() {
 
   if (!currentUser) {
     return (
-      <main className={`page${maintenanceMode ? ' maintenance-active' : ''}`}>
+      <main className="page">
         <section className="panel login-panel">
           <h2>Đăng nhập</h2>
           <p className="hint">Nhập mã quản trị để vào hệ thống thêm khách hàng.</p>
-          {maintenanceMode && (
-            <div className="maintenance-banner">
-              <div className="maintenance-banner-icon">&#9888;</div>
-              <div>
-                <strong>Hệ thống đang bảo trì</strong>
-                <p>Chỉ tài khoản quản trị (ADTEST) mới có thể đăng nhập.</p>
-              </div>
-            </div>
-          )}
           {installPanel}
           <form onSubmit={handleLoginSubmit} className="login-form">
             <label>
@@ -1935,31 +1905,10 @@ function App() {
             <p className="subtitle">Lấy vị trí GPS, chụp ảnh thực tế, và lưu thông tin khách hàng của bạn.</p>
             <p className="subtitle">Đăng nhập: <strong>{currentUser}</strong>{currentUserCode ? ` (${currentUserCode})` : ''}</p>
           </div>
-          <div className="header-actions">
-            {currentUserCode === 'ADTEST' && (
-              <button
-                type="button"
-                className={`btn-maintenance${maintenanceMode ? ' active' : ''}`}
-                onClick={handleToggleMaintenance}
-              >
-                {maintenanceMode ? 'Tắt bảo trì' : 'Bảo trì'}
-              </button>
-            )}
-            <button type="button" className="ghost" onClick={handleLogout}>Đăng xuất</button>
-          </div>
           {installPanel}
         </div>
+        {/* <button type="button" className="ghost" onClick={handleLogout}>Đăng xuất</button> */}
       </header>
-
-      {maintenanceMode && (
-        <div className="maintenance-banner sitewide">
-          <div className="maintenance-banner-icon">&#9888;</div>
-          <div>
-            <strong>Hệ thống đang bảo trì</strong>
-            <p>Các tài khoản khác không thể đăng nhập. Chỉ quản trị viên mới sử dụng được hệ thống.</p>
-          </div>
-        </div>
-      )}
 
       <section className="layout">
         <form className="panel form-panel" onSubmit={handleSubmit}>
