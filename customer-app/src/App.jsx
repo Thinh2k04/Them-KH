@@ -24,8 +24,6 @@ import './App.css'
 const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN || 'https://cd85mgkd-3000.jpe1.devtunnels.ms/').replace(/\/$/, '')
 const CUSTOMER_API_URL = `${API_ORIGIN}/api/khachhang/`
 const STORE_API_URL = `${API_ORIGIN}/api/cuahang`
-const DMS_NEARBY_RADIUS_METERS = 1000
-
 function buildLocationRejectionInfo({
   message = '',
   code,
@@ -475,18 +473,6 @@ function findKvByNpp(npp) {
   )
 }
 
-function calculateDistanceMeters(lat1, lng1, lat2, lng2) {
-  const toRadians = (degrees) => (degrees * Math.PI) / 180
-  const earthRadius = 6371000
-  const dLat = toRadians(lat2 - lat1)
-  const dLng = toRadians(lng2 - lng1)
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2)
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-  return earthRadius * c
-}
-
 function parseLooseCoordinate(value, type) {
   const direct = Number(value)
   if (Number.isFinite(direct) && Math.abs(direct) <= 180) {
@@ -671,7 +657,6 @@ function App() {
   const expandedMapRef = useRef(null)
   const expandedMapInstanceRef = useRef(null)
   const expandedMapLayersRef = useRef([])
-  const cachedDmsRef = useRef(null)
   const gettingLocationRef = useRef(false)
 
   const locationBadge = useMemo(() => {
@@ -1243,67 +1228,49 @@ function App() {
     let cancelled = false
 
     async function loadDmsCustomers() {
-      if (!detectedNpp) {
+      if (!detectedNpp || !locationData) {
         setDmsCustomers([])
         return
       }
 
       setLoadingDmsCustomers(true)
       try {
-        // Fetch and cache parsed DMS customers to avoid re-parsing on each location change
-        let parsed = cachedDmsRef.current
-        if (!parsed) {
-          const res = await fetch(`${import.meta.env.BASE_URL}khach-hang.js`)
-          const raw = await res.json()
-
-          parsed = raw
-            .map((item) => {
-              const lat = parseLooseCoordinate(item?.vi_do, 'lat')
-              const lng = parseLooseCoordinate(item?.kinh_do, 'lng')
-              return {
-                ...item,
-                vi_do_num: Number.isFinite(lat) ? lat : null,
-                kinh_do_num: Number.isFinite(lng) ? lng : null,
-              }
-            })
-            .filter((item) => item.vi_do_num !== null && item.kinh_do_num !== null)
-
-          cachedDmsRef.current = parsed
-        }
-
-        if (!locationData) {
-          if (!cancelled) setDmsCustomers([])
-          return
-        }
-
-        // Quick bbox prefilter to avoid expensive distance calculations for all points
-        const lat = Number(locationData.lat)
-        const lng = Number(locationData.lng)
-        const latDelta = DMS_NEARBY_RADIUS_METERS / 111320 // approx meters per degree lat
-        const lngMetersPerDeg = Math.max(1e-6, 111320 * Math.cos((lat * Math.PI) / 180))
-        const lngDelta = DMS_NEARBY_RADIUS_METERS / lngMetersPerDeg
-
-        const bboxCandidates = parsed.filter((customer) => {
-          return (
-            Math.abs(customer.vi_do_num - lat) <= latDelta &&
-            Math.abs(customer.kinh_do_num - lng) <= lngDelta
-          )
+        console.log('[DMS] Fetching nearby customers from API...', { lat: locationData.lat, lng: locationData.lng })
+        const res = await fetch(`${API_ORIGIN}/api/khachhang/goc/gan-day`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            vi_do: locationData.lat,
+            kinh_do: locationData.lng,
+          }),
         })
+        console.log('[DMS] API response status:', res.status)
+        const json = await res.json()
+        console.log('[DMS] API response data:', json)
 
-        const nearbyList = bboxCandidates.filter((customer) => {
-          const distance = calculateDistanceMeters(
-            lat,
-            lng,
-            Number(customer.vi_do_num),
-            Number(customer.kinh_do_num)
-          )
-          return distance <= DMS_NEARBY_RADIUS_METERS
-        })
+        const rawList = Array.isArray(json?.data) ? json.data : []
+
+        const parsed = rawList
+          .map((item) => {
+            const lat = parseLooseCoordinate(item?.vi_do, 'lat')
+            const lng = parseLooseCoordinate(item?.kinh_do, 'lng')
+            return {
+              ...item,
+              ma: item.ma_kh || item.ma || '',
+              ten: item.ten_kh || item.ten || '',
+              vi_do_num: Number.isFinite(lat) ? lat : null,
+              kinh_do_num: Number.isFinite(lng) ? lng : null,
+            }
+          })
+          .filter((item) => item.vi_do_num !== null && item.kinh_do_num !== null)
+
+        console.log('[DMS] Parsed customers:', parsed.length)
 
         if (!cancelled) {
-          setDmsCustomers(nearbyList)
+          setDmsCustomers(parsed)
         }
-      } catch {
+      } catch (err) {
+        console.error('[DMS] Error fetching nearby customers:', err)
         if (!cancelled) {
           setDmsCustomers([])
         }
