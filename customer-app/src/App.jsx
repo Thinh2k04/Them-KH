@@ -521,7 +521,7 @@ function stripAdministrativePrefix(value) {
   }
 
   return normalized
-    .replace(/^(thanh pho|tp\.?|tinh|quan|huyen|thi xa|thi tran|xa|phuong)\s+/i, '')
+    .replace(/^(thành phố|tp\.?|tỉnh|quận|huyện|thị xã|thị trấn|xã|phường)\s+/i, '')
     .trim()
 }
 
@@ -566,7 +566,11 @@ async function reverseGeocodeWardAndProvince(lat, lng) {
   }
 
   const parsed = await response.json().catch(() => null)
-  return extractWardAndProvinceFromAddress(parsed?.address)
+  console.log('[REVERSE GEO] Tọa độ:', { lat, lng })
+  console.log('[REVERSE GEO] Kết quả địa chỉ đầy đủ:', parsed?.address)
+  const result = extractWardAndProvinceFromAddress(parsed?.address)
+  console.log('[REVERSE GEO] Kết quả trích xuất:', result)
+  return result
 }
 
 function escapeHtml(value) {
@@ -1458,11 +1462,13 @@ function App() {
       return
     }
 
+    console.log('[LOCATION] Tọa độ đạt chuẩn:', { lat: verified.lat, lng: verified.lng, accuracy: verified.accuracy, source: verified.source })
     setLocationData(verified)
 
     if (Number.isFinite(verified?.lat) && Number.isFinite(verified?.lng)) {
       void reverseGeocodeWardAndProvince(verified.lat, verified.lng)
         .then(({ phuong, tinh }) => {
+          console.log('[LOCATION] Tự động điền:', { phuong, tinh })
           if (phuong || tinh) {
             setForm((prev) => ({
               ...prev,
