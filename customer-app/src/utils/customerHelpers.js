@@ -1,14 +1,11 @@
 import {
   CHANNEL_OPTIONS,
-  KV_OPTIONS,
   channelTypeMap,
-  nppByKV,
   PRODUCT_FIELD_LABELS,
 } from '../constants/customerConfig'
 
 export function createInitialForm() {
   const kenh = CHANNEL_OPTIONS[0]
-  const kv = KV_OPTIONS[0]
 
   // Initialize all product fields to false
   const productFields = {}
@@ -26,8 +23,8 @@ export function createInitialForm() {
     tinh: '',
     kenh,
     loai: channelTypeMap[kenh][0] || '',
-    kv,
-    npp: nppByKV[kv][0] || '',
+    kv: '',
+    npp: '',
     nganh_hang: [],
     ...productFields,
   }

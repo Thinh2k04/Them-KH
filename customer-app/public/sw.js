@@ -1,4 +1,4 @@
-const CACHE_NAME = 'them-kh-pwa-v5'
+const CACHE_NAME = 'them-kh-pwa-v7'
 const BASE_PATH = new URL(self.registration.scope).pathname
 const IS_LOCALHOST = ['localhost', '127.0.0.1', '[::1]'].includes(self.location.hostname)
 const withBasePath = (path) => new URL(path, self.registration.scope).pathname
@@ -84,21 +84,16 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
+  // Network-first: luôn lấy bản mới nhất, chỉ dùng cache khi offline.
   event.respondWith(
-    caches.match(request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse
-      }
-
-      return fetch(request).then((response) => {
-        if (!response || response.status !== 200 || response.type !== 'basic') {
-          return response
+    fetch(request)
+      .then((response) => {
+        if (response && response.status === 200 && response.type === 'basic') {
+          const copy = response.clone()
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy))
         }
-
-        const copy = response.clone()
-        caches.open(CACHE_NAME).then((cache) => cache.put(request, copy))
         return response
       })
-    }),
+      .catch(() => caches.match(request)),
   )
 })

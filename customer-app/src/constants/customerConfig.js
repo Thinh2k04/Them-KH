@@ -1,89 +1,3 @@
-export const nppByKV = {
-  KV1: [
-    'NPP Bảo Lâm',
-    'NPP Công Giang',
-    'NPP Cường Thịnh',
-    'NPP Đức Nam Tiến',
-    'NPP Dũng Cúc',
-    'NPP Lâm Hạ',
-    'NPP Long Liên',
-    'NPP Nguyên Vũ',
-    'NPP Thảo Nam',
-    'NPP Tuấn Huê',
-    'NPP Tuấn Yến',
-    'NPP Vũ Tấm',
-  ],
-  KV2: [
-    'NPP Duy Anh',
-    
-    'NPP Hùng Huệ',
-    'NPP Long Châm',
-    'NPP Ngọc Kiên',
-    'NPP Ngọc Thêu',
-    'NPP Phong Hiền',
-    
-    'NPP Phương Đông',
-    'NPP Thành Lụa',
-    'NPP Tuấn Huyền',
-  ],
-  KV3: [
-    'NPP Hoa Việt',
-    'NPP Phúc Thịnh',
-    'NPP Bảo Cường',
-    'NPP Hikoji',
-    'NPP Long Hải',
-    'NPP Tân Hoa',
-    'NPP Tây Đô',
-    'NPP Thắng Lợi',
-    'NPP Thành Hân',
-    'NPP Tiến Thịnh',
-  ],
-  KV4: [
-    'NPP Tùng Phương',
-    'NPP Ánh Thu',
-    'NPP Đức Oanh',
-    'NPP Dương Minh',
-    'NPP Dũng Béo',
-    'NPP Hưng Thịnh',
-    'NPP Ngọc Phúc',
-    'NPP Nguyễn Đình Hân',
-    'NPP Tân Thúy',
-    'NPP Thăng Hương',
-    'NPP Thảo Thắng',
-    
-  ],
-  KV5: [
-    'NPP Đồng Lợi',
-    'NPP Hải Hằng',
-    'NPP Hiền Cường',
-    'NPP Hoàng Minh',
-    'NPP Oanh Định',
-    'NPP Sơn Lâm',
-    'NPP Thái Hoà',
-    'NPP Thảo Xuân',
-    'NPP Duy Khoa',
-    'NPP Tuấn Vân',
-    'NPP Vũ Đức Nam',
-  ],
-  KV6: [
-    'NPP Anh Minh HT',
-    'NPP Hà Thanh',
-    'NPP Hồng Đức',
-    'NPP Linh Trang',
-    'NPP Mạnh Hà 1',
-    'NPP Mạnh Hà 2',
-    'NPP Minh Châu',
-    'NPP Minh Lộc',
-    'NPP Nhung Tùng',
-    'NPP Phương Hà',
-    'NPP Tân Bích An',
-    'NPP Thanh Bình',
-    'NPP Thành Thanh',
-    'NPP Thông Thơm',
-    'NPP Trường Hằng',
-  ],
-}
-
 export const channelTypeMap = {
   'Kênh siêu thị': ['Đại siêu thị', 'Siêu Thị Lớn', 'Siêu thị vừa và nhỏ'],
   'Kênh sỉ': ['Khách sỉ lớn', 'Khách sỉ vừa và nhỏ'],
@@ -101,9 +15,7 @@ export const nganh_hang_options = [
   'Sữa chua',
 ]
 
-export const KV_OPTIONS = Object.keys(nppByKV)
 export const CHANNEL_OPTIONS = Object.keys(channelTypeMap)
-export const NPP_OPTIONS = Object.values(nppByKV).flat()
 export const CHECK_LABELS = {
   accuracyOk: 'Độ chính xác GPS sai',
   spreadOk: 'Các mẫu GPS lệch nhau',
@@ -118,7 +30,7 @@ export const ADMIN_CODE_MAP = {
   ADHAI: 'Nguyễn Đình Hải',
   ADHA: 'Nguyễn Đình Hà',
   ADDUC: 'Nguyễn Anh Đức',
-  ADANH: 'Hoàng Anh',
+  ADCUONG: 'Nguyễn Đăng Cương',
   ADTEST: 'Admin Test',
 }
 

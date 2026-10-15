@@ -6,13 +6,12 @@ import {
   ADMIN_CODE_MAP,
   CHANNEL_OPTIONS,
   CHECK_LABELS,
-  KV_OPTIONS,
   PRODUCT_GROUPS,
   PRODUCT_FIELD_LABELS,
   channelTypeMap,
-  nppByKV,
   nganh_hang_options,
 } from './constants/customerConfig'
+import { fetchNppByKV } from './services/saleGroupService'
 import { collectGpsLocation, collectVerifiedLocation } from './services/locationService'
 import { createInitialForm, formatDate } from './utils/customerHelpers'
 import 'leaflet/dist/leaflet.css'
@@ -461,7 +460,7 @@ function findNppFeatureByPoint(point, areasPrepared) {
   return null
 }
 
-function findKvByNpp(npp) {
+function findKvByNpp(npp, nppByKV) {
   if (!npp) {
     return ''
   }
@@ -625,7 +624,8 @@ function App() {
   const [currentUser, setCurrentUser] = useState('')
   const [nppAreasPrepared, setNppAreasPrepared] = useState([])
   const [detectedNpp, setDetectedNpp] = useState('')
-  const [detectedKv, setDetectedKv] = useState('')
+  const [nppByKV, setNppByKV] = useState({})
+  const [nppByKVError, setNppByKVError] = useState('')
   const [dmsCustomers, setDmsCustomers] = useState([])
   const [loadingDmsCustomers, setLoadingDmsCustomers] = useState(false)
   const [loadingCustomers, setLoadingCustomers] = useState(false)
@@ -662,6 +662,29 @@ function App() {
   const expandedMapInstanceRef = useRef(null)
   const expandedMapLayersRef = useRef([])
   const gettingLocationRef = useRef(false)
+
+  const kvOptions = useMemo(() => Object.keys(nppByKV), [nppByKV])
+  const detectedKv = useMemo(() => findKvByNpp(detectedNpp, nppByKV), [detectedNpp, nppByKV])
+
+  useEffect(() => {
+    let cancelled = false
+    fetchNppByKV()
+      .then((data) => {
+        if (!cancelled) {
+          setNppByKV(data)
+          setNppByKVError()
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error('[SaleGroup]', err)
+          setNppByKVError(err.message || 'Không tải được danh sách khu vực')
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const locationBadge = useMemo(() => {
     if (!locationData) {
@@ -1012,9 +1035,7 @@ function App() {
     const currentLatLng = [locationData.lat, locationData.lng]
     const matchedFeature = findNppFeatureByPoint(currentPoint, nppAreasPrepared)
     const matchedNpp = matchedFeature?.properties?.npp || ''
-    const matchedKv = findKvByNpp(matchedNpp)
     setDetectedNpp(matchedNpp)
-    setDetectedKv(matchedKv)
 
     const markerLayer = L.circleMarker(currentLatLng, {
       radius: 6,
@@ -1330,7 +1351,7 @@ function App() {
 
       if (key === 'npp') {
         const nextNpp = value || ''
-        const mappedKv = findKvByNpp(nextNpp)
+        const mappedKv = findKvByNpp(nextNpp, nppByKV)
         return {
           ...prev,
           npp: nextNpp,
@@ -1389,7 +1410,6 @@ function App() {
   function resetTrackingResult() {
     setLocationData(null)
     setDetectedNpp('')
-    setDetectedKv('')
     setDmsCustomers([])
     setDmsStatus(null)
     setShowExpandedMap(false)
@@ -1624,7 +1644,6 @@ function App() {
     })
     setLocationData(null)
     setDetectedNpp('')
-    setDetectedKv('')
     setDmsCustomers([])
     setDmsStatus(null)
     setTrackingLink('')
@@ -1655,7 +1674,7 @@ function App() {
 
       const validKenh = CHANNEL_OPTIONS.includes(selectedKenh)
       const validLoai = (channelTypeMap[selectedKenh] || []).includes(selectedLoai)
-      const validKv = KV_OPTIONS.includes(selectedKv)
+      const validKv = kvOptions.includes(selectedKv)
       const validNpp = (nppByKV[selectedKv] || []).includes(selectedNpp)
       const validNganhHang =
         selectedNganhHang.length > 0 &&
@@ -1976,7 +1995,16 @@ function App() {
                   Khu vực NPP theo GPS: <strong>{detectedNpp || 'Đang xác định'}</strong>
                 </p>
                 <p className="hint">
-                  Khu vực theo NPP: <strong>{detectedKv || 'Đang xác định'}</strong>
+                  Khu vực theo NPP: <strong>
+                    {detectedKv ||
+                      (nppByKVError
+                        ? `Lỗi tải khu vực: ${nppByKVError}`
+                        : kvOptions.length === 0
+                          ? 'Đang tải danh sách khu vực...'
+                          : detectedNpp
+                            ? `NPP chưa có khu vực trên Mobiwork`
+                            : 'Đang xác định')}
+                  </strong>
                 </p>
                 <p className="hint">
                   Khách hàng DMS trong khu vực: <strong>{loadingDmsCustomers ? 'Đang tải...' : dmsCustomers.length}</strong>
@@ -2093,13 +2121,14 @@ function App() {
                     <option value="">
                       chọn Khu vực
                     </option>
-                    {KV_OPTIONS.map((kv) => (
+                    {kvOptions.map((kv) => (
                       <option value={kv} key={kv}>
                         {kv}
                       </option>
                     ))}
                   </select>
                 </label>
+                {nppByKVError ? <p className="error">{nppByKVError}</p> : null}
               </div>
 
               {dmsStatus === 'noDms' ? (
