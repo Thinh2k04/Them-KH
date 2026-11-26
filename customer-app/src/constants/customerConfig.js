@@ -32,6 +32,8 @@ export const ADMIN_CODE_MAP = {
   ADDUC: 'Nguyễn Anh Đức',
   ADCUONG: 'Nguyễn Đăng Cương',
   ADTEST: 'Admin Test',
+  ADVINH: 'Phan Quanh Vinh',
+  ADDAI: 'Hồ Quang Đại'
 }
 
 // Product categories and their checkbox fields
